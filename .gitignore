@@ -1,0 +1,17 @@
+# ── Claude Code: personal/local ──
+.claude/settings.local.json
+.claude/projects/
+.claude/todos/
+.claude/statsig/
+.claude/ide/
+.claude/shell-snapshots/
+
+# ── BMad: personal install answers & overrides ──
+# Installer-managed personal answers (header in the file says: not committed)
+_bmad/config.user.toml
+# Personal overrides under any BMad module/custom folder
+_bmad/**/config.user.toml
+
+# ── BMad: generated artifacts (optional) ──
+# Uncomment if your team treats planning outputs as throwaway.
+# _bmad-output/
