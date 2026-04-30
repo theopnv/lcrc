@@ -302,6 +302,8 @@ Designed as tracer-bullet vertical slices: each epic is a thin end-to-end path t
 
 **Hardening from red-team review (2026-04-30):** Epic 1's sandbox now ships structurally default-deny on workspace + network axes (not just workspace). Epic 1 ships the full `ExitCode` enum (all 9 variants) so the public contract is locked from v0.1.0. Epic 1 exercises the real GGUF parser on a real model file (no synthetic fixtures). Epic 2 adds two early-detection stories: a sandbox adversarial smoke test (subset of acceptance #9) and a Quick budget sanity check on the M1 Pro 32GB reference rig. Both feed back into Epic 2 design before Epic 3 builds on top.
 
+**Second-pass hardening from Code Review Gauntlet + Self-Consistency Validation (2026-04-30):** Folded 9 priority items: (1) Badge enum's 10 variants now have full attachment coverage across Epic 2 (Story 2.18: server-startup-failure, server-crashed, thermal-throttled) and Epic 3 (Story 3.6: ctx-limited, oom-at-n, repetition-loop, tool-call-format-failure). (2) Per-task container image vendoring is now an explicit Story 1.14 (`image/Dockerfile` + `image/requirements.txt` + bootstrap GHCR publish), not implicit in Story 1.10's pull AC. (3) `--report-path` resolved to true OVERRIDE semantics (Story 3.5) — when set, the default `latest.html` and timestamped historical files are NOT written; the override is the single canonical output. (4) Canary task now runs against a hardcoded canary-only model (small GGUF, vendored as release artifact, SHA-pinned) rather than ambiguous orchestration against a discovered model (Stories 2.3 + 2.5). (5) Sandbox port-pinning is now structurally enforced via iptables rules in the runtime's network configuration (Story 1.10 ACs); third-party runtimes that don't expose rule injection cause preflight to exit 11 — no degraded "DNS denial only" mode. (6) Three "decided at implementation time" deferrals are now decided: S1.8 = constraint-violation on same-PK write (lookup-before-measure invariant violation surfaces loudly; no UPSERT); S3.5 = exit 10 (ConfigError) on `--report-path` write failure (no new exit-code variant); S4.2 = `lcrc show --depth <tier>` recomputes pass-rate from filtered cells only (filter is symmetric across tiers). (7) Verify gains a Ctrl-C-during-flight AC (Story 5.1). (8) Release pipeline gains a v0.9.0-rc1 dry-run gate (Story 7.8) so v1.0.0 is the second end-to-end exercise of the release chain, not the first.
+
 ### Epic 1: Integration spine — one cell, one row, end-to-end
 
 Lay down the project scaffold and prove every layer interlocks for a single hardcoded measurement. After this epic, `lcrc scan` (with a hardcoded path to one of Theop's real GGUFs) runs the canary task against that model inside a structurally default-deny container (no host filesystem except per-task workspace, no network except a localhost pinhole to llama-server, custom Docker network with no DNS), persists one cell to SQLite, and renders a one-row `latest.html` on disk. The cache, sandbox network envelope, llama-server lifecycle, real GGUF parser (SHA + metadata), harness invocation, and HTML renderer are all wired. The full `ExitCode` enum (all 9 variants) lands in `src/exit_code.rs` — even though most trigger paths fill in across later epics, the public contract is locked from v0.1.0. This epic resolves integration risk before we invest in elaboration.
@@ -564,9 +566,9 @@ So that no half-written cells exist (NFR-R2) and lookups before measurement work
 **When** I call `lookup_cell()` for a nonexistent key
 **Then** it returns `Ok(None)` in the same budget.
 
-**Given** unit tests
-**When** two concurrent `write_cell()` calls target the same PK
-**Then** the behavior is deterministic and documented (UPSERT or constraint-violation, decided at implementation time).
+**Given** two `write_cell()` calls target the same PK (whether concurrent or sequential)
+**When** the second call attempts its INSERT
+**Then** it returns `Err(CacheError::DuplicateCell)` mapped from `SQLITE_CONSTRAINT_PRIMARYKEY`. UPSERT is **not** used: the lookup-before-measure invariant (FR26) plus single-writer enforcement (FR52, `scan.lock`) means a same-PK write indicates an upstream bug — surfacing it loudly is the design, not a defect to paper over with silent overwrite.
 
 ### Story 1.9: Container runtime preflight with socket precedence chain
 
@@ -603,8 +605,8 @@ So that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
 ### Story 1.10: `Sandbox::run_task` with workspace mount + custom default-deny network
 
 As a developer,
-I want `Sandbox::run_task(image_digest, workspace_path) -> Result<TaskOutcome>` to spawn an ephemeral container with a workspace bind-mount, no other host filesystem visibility, and a custom Docker network with no DNS resolver and only a localhost pinhole to the host's `llama-server`,
-So that every measurement runs in a structurally default-deny envelope from Epic 1 onward (FR16 workspace + network axes; env axis follows in Epic 2).
+I want `Sandbox::run_task(image_digest, workspace_path) -> Result<TaskOutcome>` to spawn an ephemeral container with a workspace bind-mount, no other host filesystem visibility, and a custom Docker network whose outbound traffic is restricted by iptables rules to a single host:port (the llama-server),
+So that every measurement runs in a structurally default-deny envelope from Epic 1 onward — port-pinning enforced structurally at the network layer, not by best-effort DNS denial alone (FR16 workspace + network axes; env axis follows in Epic 2).
 
 **Acceptance Criteria:**
 
@@ -627,6 +629,18 @@ So that every measurement runs in a structurally default-deny envelope from Epic
 **Given** the container starts and `host.docker.internal:<llama-port>` is reachable from the host
 **When** the agent connects to that endpoint
 **Then** the connection succeeds — this is the only allowed network destination.
+
+**Given** the container is started and the custom Docker network is configured
+**When** the agent attempts `nc -zv host.docker.internal 22` (or any host-gateway port other than the llama-server's)
+**Then** the connection fails (refused or timeout) — outbound is structurally restricted to a single host:port via iptables rules installed in the runtime's network namespace, not by best-effort DNS denial alone.
+
+**Given** lcrc's packaged-default runtime is Podman (per AR-12)
+**When** lcrc creates the per-scan network
+**Then** iptables rules (configured via Podman's CNI/Netavark backend) drop all container outbound traffic except DNAT'd packets to the host's llama-server port; rule installation is verified at scan preflight by exercising the negative probe above against a probe sentinel port.
+
+**Given** a third-party Docker-API-compatible runtime (Colima, OrbStack, Docker Desktop) is detected at preflight
+**When** lcrc cannot install equivalent iptables/nftables rules through the runtime's exposed surface
+**Then** lcrc exits 11 with a documented "structural port-pin unavailable on this runtime; reinstall with the packaged Podman or use a runtime that exposes network rule injection" message. Per NFR-S3, no `--unsafe-no-sandbox` fallback exists; either the sandbox is structural or scan refuses to run.
 
 **Given** `Sandbox::run_task` returns (success, failure, or panic)
 **When** I check container state
@@ -720,6 +734,34 @@ So that I can open the report in a browser and verify the renderer interlocks wi
 **When** I inspect the file mode
 **Then** it is readable by the user and not world-writable.
 
+### Story 1.14: Vendor per-task container image (Dockerfile + requirements + bootstrap GHCR publish)
+
+As a developer,
+I want `image/Dockerfile` and `image/requirements.txt` vendored in the repo with the per-task base image (Debian-slim) and a pinned mini-swe-agent + pytest + minimal toolchain, plus an initial manual publish to GHCR producing the digest referenced by `src/constants.rs::CONTAINER_IMAGE_DIGEST`,
+So that Story 1.10's `Sandbox::run_task` image-pull has something to pull, and Story 7.3's automated release workflow takes over from a known-good baseline rather than bootstrapping from scratch at v1.0.0.
+
+**Acceptance Criteria:**
+
+**Given** the repo at `image/`
+**When** I inspect it
+**Then** `image/Dockerfile` exists with `FROM debian:bookworm-slim` (per AR-13), pinned `python3` + `pytest` + `git` + minimal toolchain via apt, and a `COPY image/requirements.txt` step installing `mini-swe-agent` at a pinned version. The Dockerfile is short (~30 lines or less); reviewers can read it end-to-end to verify isolation per NFR-S6.
+
+**Given** `image/requirements.txt`
+**When** I inspect it
+**Then** every dependency is version-pinned (`mini-swe-agent==X.Y.Z`, `pytest==A.B.C`, etc.); no unpinned `>=` or floating versions; no `RUN curl | bash` patterns in the Dockerfile; every external download is hash-verified or apt-pinned.
+
+**Given** the initial image build (manual, pre-Story-7.3 automation)
+**When** the maintainer runs `docker build image/ -t ghcr.io/<org>/lcrc-task:0.1.0` and pushes to GHCR
+**Then** the resulting image digest (`sha256:...`) is captured and written to `src/constants.rs::CONTAINER_IMAGE_DIGEST`; this digest is what Story 1.10's pull verifies against. The bootstrap publish process is documented in `docs/release-process.md` as the historical bootstrap, superseded by Story 7.3's automation at v1 ship.
+
+**Given** the image is published and `CONTAINER_IMAGE_DIGEST` is set
+**When** Story 1.10's integration test runs
+**Then** the image pull verifies the digest matches and the test passes; if the constant doesn't match the published image (e.g., someone repushed without updating the constant), the test fails loudly.
+
+**Given** the AR-38 placeholder `<org>` is still unresolved at Story 1.14 time
+**When** I check this story's deliverables
+**Then** Story 1.14 ships with a placeholder `<org>` initially; the actual org name is filled by Story 7.3 (which also re-tags + re-publishes under the real org and updates the digest constant). This story's job is to prove the build-and-publish chain works at all; org naming is its own concern.
+
 ---
 
 ## Epic 2: Quick scan — real models, real leaderboard
@@ -792,7 +834,7 @@ So that v1 ships a single curated task source while leaving a clean slot for v1.
 
 **Given** the repo
 **When** I check `tasks/swe-bench-pro/`
-**Then** I find `manifest.json` (with `version` field, `tasks[]` array in static "most-informative-first" order, `canary` reference), per-task fixtures under `tasks/`, and a canary task under `canary/` with a known-good baseline.
+**Then** I find `manifest.json` (with `version` field, `tasks[]` array in static "most-informative-first" order, `canary` reference), per-task fixtures under `tasks/`, and a canary task under `canary/` with a known-good baseline plus a hardcoded canary model fixture (small GGUF, <1GB, SHA-256-pinned). The canary model is shipped as a release artifact (not committed to git; not git-LFS) and resolved at first scan via lcrc's asset-fetch helper into `$XDG_DATA_HOME/lcrc/canary/`; subsequent scans use the cached file. Hash is verified on every load.
 
 **Given** `SweBenchProSource::list_tasks()`
 **When** called
@@ -857,6 +899,10 @@ So that infrastructure drift (harness regression, backend regression, OS change)
 **Given** the canary cell write
 **When** I inspect the cache
 **Then** the canary cell has `task_id` matching the canary's manifest ID and is keyed identically to other cells (it's a normal cell with a special `task_id`).
+
+**Given** the canary task fixture (per Story 2.3) ships a hardcoded canary-only model (small GGUF, <1GB, SHA-256-pinned, vendored as release artifact)
+**When** the canary executes
+**Then** it runs against the hardcoded canary model — never against a user-discovered model. Rationale: the canary's purpose is infrastructure validation (harness + sandbox + llama-server lifecycle + report rendering), so the model must be fixed across machines and lcrc versions for the `canary-pass` / `canary-fail` signal to be meaningful. The canary cell's `model_sha` is the pinned canary-model SHA; `task_subset_version` matches the rest of the SWE-Bench Pro subset (canary lives inside the same `manifest.json`).
 
 ### Story 2.6: Multi-model orchestrator runs Quick depth
 
@@ -1173,6 +1219,34 @@ So that I catch a Quick budget blowout *now* — before Epic 3 builds Standard/F
 **When** Theop ships v1
 **Then** the values are informed by data from this script + ongoing Epic 3 Standard/Full runs, not by working assumptions alone.
 
+### Story 2.18: Server lifecycle and thermal badge attachment
+
+As Theop,
+I want the cell-write path to attach the templated badges `server-startup-failure`, `server-crashed`, and `thermal-throttled` when the corresponding infrastructure event is detected during a measurement,
+So that the leaderboard distinguishes infrastructure failures from model behavior, completing 3 of the 7 dormant variants in Story 2.4's `Badge` enum (per FR36 contract).
+
+**Acceptance Criteria:**
+
+**Given** `LlamaServer::start` returns `Err(ServerStartupFailure)` (per Story 1.11) for a planned `(model, params)` group
+**When** the orchestrator records the affected cells
+**Then** every cell in that group is written with `pass=0` and `Badge::ServerStartupFailure` attached; the orchestrator continues with the next group; no llama-server is left running.
+
+**Given** llama-server crashes mid-task (process exits non-zero, OR stops responding to `/health` for >`server_startup_timeout`, OR closes the inference connection unexpectedly)
+**When** the in-flight task is interrupted
+**Then** the affected cell is written with `pass=0` and `Badge::ServerCrashed`; the per-task container is torn down; remaining tasks in the same group are written with `pass=0` + `Badge::ServerCrashed` (the model failed structurally; we don't pretend to measure further); the orchestrator restarts llama-server fresh for the next group.
+
+**Given** Story 2.10 collects `thermal_state` via the IOReport framework during a measurement
+**When** `thermal_state` indicates throttling at any sample point (e.g., transitions from `IOReportNominal` to `IOReportFair`/`IOReportSerious`/`IOReportCritical`)
+**Then** the cell is written with `Badge::ThermalThrottled` (in addition to its pass/fail). The badge does NOT change `pass` — it's a context flag for the human reader explaining a slow result.
+
+**Given** the FR36 badge contract
+**When** I inspect `src/scan/orchestrator.rs` (or wherever cells are finalized)
+**Then** `ServerStartupFailure`, `ServerCrashed`, and `ThermalThrottled` are attached at the documented detection points; `CtxLimited`, `OomAtN`, `RepetitionLoop`, and `ToolCallFormatFailure` remain dormant in the enum (attached in Epic 3 per Story 3.6, since detection of those benefits from Standard/Full's larger task counts).
+
+**Given** integration tests for the three new badges
+**When** CI runs them
+**Then** each badge has at least one fixture that triggers its attachment path (e.g., `tests/badges/server_startup_failure.rs` uses a corrupt-GGUF fixture; `tests/badges/server_crashed.rs` uses a fixture that kills llama-server mid-task; `tests/badges/thermal_throttled.rs` mocks `IOReport` to return `IOReportFair`); the cell write is verified.
+
 ---
 
 ## Epic 3: Standard & Full depths — cache extension proves cache-as-product
@@ -1305,19 +1379,51 @@ So that I can keep a record of past scans for comparison and direct the report t
 
 **Given** I run `lcrc scan --report-path /tmp/myrun.html`
 **When** the scan completes
-**Then** `/tmp/myrun.html` exists with the report content; the default `$XDG_DATA_HOME/lcrc/reports/latest.html` and timestamped historical file are STILL written too (the override adds, doesn't replace, the default outputs).
+**Then** `/tmp/myrun.html` exists with the report content; the default `$XDG_DATA_HOME/lcrc/reports/latest.html` and timestamped historical file are NOT written. `--report-path` is a true override: it redirects the single canonical report output to the user-supplied path. The user opts out of lcrc's default history-keeping when they pass `--report-path`; if they want both, they invoke twice or set up their own copy step.
 
 **Given** the override path is in a non-existent directory
 **When** the scan runs
-**Then** lcrc creates the parent directory (best-effort) and writes the file; if creation fails, exits with a config-style error (clear stderr message; exit 10 or report-path-specific code documented in `src/exit_code.rs` rationale).
+**Then** lcrc creates the parent directory (best-effort) and writes the file. If creation or write fails (path invalid, permissions denied, disk full, etc.), the measurement still completes and the cache still writes, but lcrc exits 10 (ConfigError) with a stderr message identifying the offending path. Exit 10 is the resolved code: `--report-path` is a CLI-supplied configuration value (per FR50 layered precedence), so a bad value is a config error; no new exit-code variant is introduced.
 
-**Given** the historical report write
+**Given** the historical report write (default no-override case only)
 **When** the file is created
-**Then** the filename uses the same RFC 3339 UTC timestamp as the cell `scan_timestamp` for any cell written during this scan (consistency check via `util::time` single helper).
+**Then** the filename uses the same RFC 3339 UTC timestamp as the cell `scan_timestamp` for any cell written during this scan (consistency check via `util::time` single helper). When `--report-path` is set, no historical file is written and this AC does not apply.
 
 **Given** the historical reports directory accumulates
 **When** I list it after several scans
 **Then** I see `latest.html` plus N timestamped files; lcrc does NOT auto-prune (per PRD: `lcrc gc` is v1.1+); the user manages disk themselves.
+
+### Story 3.6: Model-behavior badge detection and attachment
+
+As Theop,
+I want the cell-write path to attach `ctx-limited`, `oom-at-n`, `repetition-loop`, and `tool-call-format-failure` badges when the corresponding model-behavior failure mode is detected during a SWE-Bench Pro task,
+So that the leaderboard surfaces actionable failure-mode information and the FR36 badge contract is fully delivered before Epic 7's adversarial battery audits the trust story.
+
+**Acceptance Criteria:**
+
+**Given** mini-swe-agent's prompt or accumulated context exceeds the model's `n_ctx` (detected via llama-server's API returning `context_length_exceeded`, OR the agent abandoning the task with a documented context-overflow code)
+**When** the cell writes
+**Then** `Badge::CtxLimited` is attached; `pass=0`; the badge metadata records the cell-time `n_ctx` value vs the model's hard limit so the human reader can decide whether a different ctx variant (Story 3.3) would help.
+
+**Given** llama-server (or the per-task container) is killed by the kernel OOM killer mid-task
+**When** the orchestrator detects the process exit signal (`SIGKILL` with no graceful shutdown trace) or the container's exit code matches OOM patterns (137 etc.)
+**Then** the cell is written with `pass=0` and `Badge::OomAtN`; the badge metadata records the model's measured `peak_rss_bytes` (from Story 2.10) at the point of kill, so the fit gate (Story 2.2) can be tuned if OOMs cluster on a quant tier the gate currently passes.
+
+**Given** the agent's output stream contains more than N consecutive identical tokens (heuristic threshold documented in `src/orchestrator/repetition.rs`, e.g., 200+ identical tokens or 500+ tokens forming a recognized loop pattern)
+**When** the heuristic fires before the task's wall-clock cap
+**Then** the orchestrator aborts the task; the cell is written with `pass=0` and `Badge::RepetitionLoop`; `Badge::TaskTimeout` is NOT attached on the same cell (avoid double-attribution; repetition loop is the more specific finding).
+
+**Given** mini-swe-agent's tool-call output cannot be parsed (malformed JSON, missing required fields, schema violation per the agent's documented tool-call contract)
+**When** the agent's parser raises and the task fails as a result
+**Then** the cell is written with `pass=0` and `Badge::ToolCallFormatFailure`; this badge does not double-attribute with `Badge::TaskTimeout` either.
+
+**Given** the FR36 badge contract is now fully wired
+**When** I inspect `src/scan/orchestrator.rs` (and downstream parsers)
+**Then** all 10 `Badge` variants have an attachment path: 3 from Epic 2's earlier stories (`SandboxViolation`, `TaskTimeout`, `LowConfidenceCi`), 3 from Story 2.18 (`ServerStartupFailure`, `ServerCrashed`, `ThermalThrottled`), and 4 from this story (`CtxLimited`, `OomAtN`, `RepetitionLoop`, `ToolCallFormatFailure`). Epic 7's adversarial battery (Story 7.4) audits the resulting badge surface end-to-end.
+
+**Given** Standard/Full depth measurements run more tasks per model than Quick
+**When** the new badges are exercised at scale
+**Then** at least one fixture per badge has triggered in CI (added as integration tests under `tests/badges/`); badge frequency in `cells.badges` is queryable for future analysis.
 
 ---
 
@@ -1365,9 +1471,9 @@ So that I can scope the view to the slice of the cache I care about (FR41).
 **When** the command runs
 **Then** only rows whose model name (or `model_sha` prefix) matches `qwen` appear; the filter helper from Story 3.4 is reused (no duplicated logic).
 
-**Given** `lcrc show --depth standard`
+**Given** `lcrc show --depth standard` against a cache where some rows have cells from multiple tiers (e.g., 1 Quick cell + 3 Standard cells per model)
 **When** the command runs
-**Then** only rows whose cells were produced at Standard depth appear; rows whose cells span multiple depths are filtered to show only the Standard subset (rendering documented in `src/show.rs`).
+**Then** the row's pass-rate and Wilson CI are recomputed using only the Standard-tier cells (3 of 4 in the example); the Quick cell is invisible to the filter. Rows with zero Standard cells are omitted entirely. The filter is symmetric: `--depth quick` would show only Quick-tier contributions, `--depth full` only Full-tier. Recomputation per filter avoids needing a separate "which depth tier wins for the row" rule on the leaderboard render.
 
 **Given** `lcrc show --limit 5`
 **When** the command runs against a cache of 12 models
@@ -1510,6 +1616,10 @@ So that I have fresh measurements to compare against cached ones (FR28; PRD Jour
 **Given** verify completes its re-measurements
 **When** I `SELECT count(*) FROM cells WHERE scan_timestamp > <verify_start_time>`
 **Then** zero new cells were written (verify is non-destructive per NFR-R6).
+
+**Given** verify is mid-flight (one re-measurement in progress, others queued)
+**When** the user sends SIGINT (Ctrl-C)
+**Then** verify exits 3 within ~1 s; the in-progress per-task container is torn down on best-effort basis (mirroring Story 1.12 + NFR-R8); any llama-server spawned by verify is terminated; no partial drift output is written to stdout. Verify is non-destructive (Story 5.3 read-only-open) so there is no cache state to roll back.
 
 ### Story 5.2: Numerical drift report (cached vs new, delta, CI overlap)
 
@@ -2041,3 +2151,31 @@ So that v1 doesn't ship a license violation and lcrc has a graceful path if Pro 
 **Given** v1 release
 **When** the README is updated
 **Then** it accurately reflects which case (A or B) is in effect and what the user needs to know.
+
+### Story 7.8: Release-pipeline dry-run via v0.9.0-rc1
+
+As a maintainer (Theop),
+I want to cut a v0.9.0-rc1 release through the entire pipeline (release workflow → image publish → GHCR digest pin → tap formula update → `brew install lcrc` → smoke test on a clean Mac) before tagging v1.0.0,
+So that the first end-to-end exercise of the release chain is a release candidate I can throw away, not the actual v1 cut where mistakes ship to friends.
+
+**Acceptance Criteria:**
+
+**Given** Stories 7.1, 7.2, 7.3, 7.4 are complete and CI is green
+**When** I push tag `v0.9.0-rc1`
+**Then** the release workflow runs end-to-end: builds the binary, packages the tarball, builds and pushes the per-task image to GHCR with a real digest, captures the digest, opens a PR against the tap repo with the updated formula, drafts the GitHub Release with the tarball + SHA256.
+
+**Given** the dry-run completes
+**When** I run `brew install lcrc` from the tap on a clean Mac (or a clean test VM)
+**Then** the formula installs cleanly; `lcrc --version` reports `0.9.0-rc1` with all self-attestation fields populated (per Story 6.6); `lcrc scan` (after `podman machine init && start` per Story 1.9 caveats) runs end-to-end against my real installed-model set and produces a populated `latest.html`.
+
+**Given** any pipeline failure during the dry-run
+**When** I diagnose
+**Then** the failure is repaired in the codebase (not papered over); a follow-up `v0.9.0-rc2` (or further) is cut and re-tested. v1.0.0 is tagged only after a fully-clean dry-run end-to-end.
+
+**Given** the dry-run process is documented
+**When** I update `docs/release-process.md`
+**Then** the dry-run is recorded as a required ship-gate step for any future major version bump (v2.0.0, etc.); the document includes the rc-tag naming convention and the "repair, don't paper over" policy.
+
+**Given** the rc1 release artifacts (tarball, image, formula PR)
+**When** v1.0.0 is tagged after a clean dry-run
+**Then** the rc1 artifacts are either (a) deleted (release deleted from GitHub, image untagged from GHCR via `gh release delete` + GHCR API, tap PR closed without merge), or (b) left in place as historical reference. Choice is the maintainer's; rationale is recorded in CHANGELOG.
