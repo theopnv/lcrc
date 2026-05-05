@@ -12,18 +12,18 @@ so that quality discipline is enforced from the first commit and AI agents inher
 
 ## Acceptance Criteria
 
-1. **AC1 (build):** Given a fresh clone of the repo, when I run `cargo build`, then the build succeeds on Rust 1.85+ stable with edition 2024.
+1. **AC1 (build):** Given a fresh clone of the repo, when I run `cargo build`, then the build succeeds on Rust 1.95+ stable with edition 2024.
 2. **AC2 (lints baked in):** Given the project root, when I inspect `Cargo.toml`, then `[lints.rust]` declares `unsafe_code = "forbid"` and `missing_docs = "warn"`, and `[lints.clippy]` declares `pedantic = { level = "warn", priority = -1 }`, `unwrap_used = "deny"`, `expect_used = "deny"`, `panic = "deny"` (with test-only exemptions documented in code).
 3. **AC3 (curated dependency set):** Given the project root, when I inspect the dependency list, then it matches the architecture's locked set: `clap` v4 (with `derive`), `etcetera`, `is-terminal`, `nu-ansi-term`, `indicatif`, `serde`, `serde_derive`, `toml`, `figment`, `tokio` (full features), `reqwest`, `bollard`, `rusqlite` (bundled), `sha2`, `tempfile`, `fs2` (or `fd-lock`), `askama`, `nix`, `anyhow`, `thiserror`, `tracing`, `tracing-subscriber`, `time`, plus a GGUF parser dependency or module placeholder.
 4. **AC4 (rustfmt clean):** Given the project root, when I run `cargo fmt --check`, then it succeeds (rustfmt config present at `rustfmt.toml`).
-5. **AC5 (MSRV pinned):** Given the project root, when I look at `rust-toolchain.toml`, then it pins MSRV to current stable (Rust 1.85+).
+5. **AC5 (MSRV pinned):** Given the project root, when I look at `rust-toolchain.toml`, then it pins MSRV to current stable (Rust 1.95+).
 
 ## Tasks / Subtasks
 
 - [x] **T1. Initialize the crate (AC: #1, #5)**
   - [x] T1.1 Run `cargo new --bin lcrc` semantics inside the existing repo root: create `Cargo.toml` and `src/main.rs` directly at the repo root (do **not** create a nested `lcrc/` subdirectory; this repo *is* the crate root).
-  - [x] T1.2 Author `rust-toolchain.toml` pinning `channel = "stable"` and `components = ["rustfmt", "clippy"]` (relying on the toolchain manager — rustup/Homebrew Rust — to provide stable ≥ 1.85).
-  - [x] T1.3 Set `edition = "2024"` and `rust-version = "1.85"` in `[package]`.
+  - [x] T1.2 Author `rust-toolchain.toml` pinning `channel = "stable"` and `components = ["rustfmt", "clippy"]` (relying on the toolchain manager — rustup/Homebrew Rust — to provide stable ≥ 1.95).
+  - [x] T1.3 Set `edition = "2024"` and `rust-version = "1.95"` in `[package]`.
   - [x] T1.4 Author a minimal `src/main.rs` that compiles cleanly under the workspace lints (e.g. `fn main() { /* lcrc entry — wired in Story 1.4 */ }`); add a crate-level doc comment to satisfy `missing_docs = "warn"` for the binary target.
 
 - [x] **T2. Bake in workspace lints (AC: #2)**
@@ -59,7 +59,7 @@ This story scaffolds the crate. **It does not create the full `src/` module tree
 
 ### Architecture compliance (binding constraints)
 
-- **Edition + MSRV** [Source: architecture.md#Rust Style Baseline]: Rust 2024 edition, MSRV pinned to current stable at v1 start (Rust 1.85+). Local toolchain check: `rustc --version` already reports `1.95.0` on this machine, so build will succeed; the `rust-version = "1.85"` field documents the contract for downstream consumers.
+- **Edition + MSRV** [Source: architecture.md#Rust Style Baseline]: Rust 2024 edition, MSRV pinned to current stable at v1 start (Rust 1.95+). Local toolchain `rustc --version` reports `1.95.0`; the `rust-version = "1.95"` field documents the contract for downstream consumers, matching the active stable channel.
 - **Single binary, no Cargo workspace** [Source: architecture.md#Project Structure & Boundaries (lcrc/ tree, no `[workspace]` table) + AR-26 in epics.md]: The crate manifest is at the **repo root**, not nested. Do not introduce `[workspace]` in v1.
 - **File-as-module style** [Source: architecture.md#Module Organization]: No `mod.rs`. Not actively exercised in this story (only `main.rs` exists), but enforce it from the very first added module in subsequent stories.
 - **Lints are non-negotiable** [Source: architecture.md#Rust Style Baseline + AR-27]: The exact `[lints.*]` tables in AC2 are copy-paste-able from the architecture — do not improvise variants.
@@ -182,7 +182,7 @@ claude-opus-4-7 (1M context) via Claude Code (`/bmad-dev-story`)
 ### Completion Notes List
 
 - Crate manifest authored at the repo root (no nested `lcrc/` dir, no `[workspace]` table) per AR-26.
-- Edition `2024`, `rust-version = "1.85"` set; local toolchain is rustc `1.95.0` (Homebrew), satisfying MSRV.
+- Edition `2024`, `rust-version = "1.95"` set; local toolchain is rustc `1.95.0` (Homebrew), satisfying MSRV.
 - `rust-toolchain.toml` pins `channel = "stable"` and pulls `rustfmt`/`clippy` components.
 - Workspace lints baked in exactly per AC2: `unsafe_code = "forbid"`, `missing_docs = "warn"`, `pedantic = warn (priority -1)`, `unwrap_used = "deny"`, `expect_used = "deny"`, `panic = "deny"`. The test-only exemption pattern is documented as a comment block above the `[lints.rust]` table.
 - Curated dependencies all present with required features wired (clap/derive, tokio/full, serde/derive, rusqlite/bundled, figment/toml+env, reqwest with `default-features = false` + `json`+`rustls-tls`, tracing-subscriber/env-filter+fmt). Conservative caret constraints; cargo resolved each to its current stable.

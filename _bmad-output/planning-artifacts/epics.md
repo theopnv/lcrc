@@ -160,7 +160,7 @@ These are technical requirements from the Architecture document that constrain i
 
 **Language, Toolchain & Distribution**
 
-- AR-1: Implementation language is Rust, edition 2024, MSRV pinned to current stable at v1 start (Rust 1.85+); single static binary distribution.
+- AR-1: Implementation language is Rust, edition 2024, MSRV pinned to current stable at v1 start (Rust 1.95+); single static binary distribution.
 - AR-2: License is Apache-2.0 (single-license).
 - AR-3: Single async runtime: Tokio (`#[tokio::main(flavor = "multi_thread")]`). All I/O via `tokio::fs` and `tokio::process`; no `std::fs` / `std::process`; no `block_on` inside async code.
 - AR-4: Curated dependency list locked at v1 start: `clap` v4 (CLI), `etcetera` (XDG paths), `is-terminal` + `nu-ansi-term` + `indicatif` (TTY/progress), `serde` + `serde_derive` + `toml` + `figment` (config), `tokio` + `reqwest` (async/HTTP), `bollard` (container API), `rusqlite` (SQLite), `sha2` (hashing), `tempfile` + `fs2`/`fd-lock` (atomicity & lock file), `askama` (HTML templating), `nix` (signals), `anyhow` + `thiserror` (errors), `tracing` + `tracing-subscriber` (logging), `time` (RFC 3339 timestamps), GGUF parser (`ggus` crate or handwritten).
@@ -368,7 +368,7 @@ So that quality discipline is enforced from the first commit and AI agents inher
 
 **Given** a fresh clone of the repo
 **When** I run `cargo build`
-**Then** the build succeeds on Rust 1.85+ stable with edition 2024.
+**Then** the build succeeds on Rust 1.95+ stable with edition 2024.
 
 **Given** the project root
 **When** I inspect `Cargo.toml`
@@ -384,7 +384,7 @@ So that quality discipline is enforced from the first commit and AI agents inher
 
 **Given** the project root
 **When** I look at `rust-toolchain.toml`
-**Then** it pins MSRV to current stable (Rust 1.85+).
+**Then** it pins MSRV to current stable (Rust 1.95+).
 
 ### Story 1.2: CI workflow gates fmt, clippy, and tests
 

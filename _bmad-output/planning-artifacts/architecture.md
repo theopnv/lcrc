@@ -108,7 +108,7 @@ There is no "create-lcrc-app" — the foundation is vanilla `cargo`:
 ```bash
 cargo new --bin lcrc
 cd lcrc
-# Set Rust edition 2024 in Cargo.toml; pin MSRV to current stable (Rust 1.85+ at v1 start).
+# Set Rust edition 2024 in Cargo.toml; pin MSRV to current stable (Rust 1.95+ at v1 start).
 ```
 
 This is the first implementation story.
@@ -175,7 +175,7 @@ Locked at v1 start; revisited in Step 6 (source tree) and Step 4 (where storage 
 ### Architectural Decisions Provided by This Foundation
 
 **Language & Runtime:**
-- Rust 2024 edition. MSRV pinned to current stable at v1 start (Rust 1.85+).
+- Rust 2024 edition. MSRV pinned to current stable at v1 start (Rust 1.95+).
 - Single static binary; no runtime dependency on Python, Node, or any other interpreter on the host.
 - Tokio as the single async runtime; no mixed runtime story.
 
@@ -580,7 +580,7 @@ For lcrc on Rust + Tokio + SQLite + Podman/bollard, the AI-agent conflict points
 
 ### Rust Style Baseline
 
-- **Edition:** Rust 2024. MSRV pinned in `Cargo.toml` to current stable at v1 start (1.85+).
+- **Edition:** Rust 2024. MSRV pinned in `Cargo.toml` to current stable at v1 start (1.95+).
 - **rustfmt:** default profile, `cargo fmt --check` is a CI gate.
 - **clippy:** `cargo clippy --all-targets --all-features -- -D warnings` is a CI gate.
 - **Lints baked in `Cargo.toml`:**
@@ -843,7 +843,7 @@ lcrc/                                  # repo root
 ├── LICENSE                            # Apache-2.0
 ├── CHANGELOG.md
 ├── .gitignore
-├── rust-toolchain.toml                # MSRV pin (Rust 1.85+ stable)
+├── rust-toolchain.toml                # MSRV pin (Rust 1.95+ stable)
 ├── rustfmt.toml                       # default profile
 │
 ├── .github/
