@@ -1,3 +1,6 @@
+# ── Rust ──
+target/
+
 # ── Claude Code: personal/local ──
 .claude/settings.local.json
 .claude/projects/

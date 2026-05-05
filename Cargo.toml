@@ -1,0 +1,86 @@
+[package]
+name = "lcrc"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.85"
+description = "Local-only LLM coding-runtime comparison harness"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[[bin]]
+name = "lcrc"
+path = "src/main.rs"
+
+[dependencies]
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Filesystem / TTY / terminal UI
+etcetera = "0.10"
+is-terminal = "0.4"
+nu-ansi-term = "0.50"
+indicatif = "0.17"
+
+# Serialization / config
+serde = { version = "1", features = ["derive"] }
+serde_derive = "1"
+toml = "0.8"
+figment = { version = "0.10", features = ["toml", "env"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client (llama-server)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Container runtime
+bollard = "0.18"
+
+# Cache storage (bundled SQLite avoids host libsqlite dependency)
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Hashing / temp files / file locks
+sha2 = "0.10"
+tempfile = "3"
+fs2 = "0.4" # AR-4 permits fd-lock as a substitute
+
+# HTML report templating
+askama = "0.12"
+
+# Unix signal handling
+nix = { version = "0.29", features = ["signal"] }
+
+# Errors
+anyhow = "1"
+thiserror = "2"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Time / timestamps
+time = { version = "0.3", features = ["formatting", "macros"] }
+
+# GGUF parser (Option A per Story 1.1 T3.3 — handwritten fallback documented but not used)
+ggus = "0.5"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+insta = { version = "1", features = ["yaml"] }
+
+# Workspace lints (AR-27, architecture §"Rust Style Baseline").
+# Test modules opt out via:
+#   #[cfg(test)]
+#   #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#   mod tests { ... }
+# applied per-file when tests are added.
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
