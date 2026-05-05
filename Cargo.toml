@@ -11,6 +11,10 @@ publish = false
 name = "lcrc"
 path = "src/main.rs"
 
+[lib]
+name = "lcrc"
+path = "src/lib.rs"
+
 [dependencies]
 # CLI
 clap = { version = "4", features = ["derive"] }
