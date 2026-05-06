@@ -57,8 +57,13 @@ async fn detect_returns_apple_silicon_canonical_string() {
 async fn detect_returns_unsupported_hardware_on_non_macos() {
     let result = lcrc::machine::MachineFingerprint::detect().await;
     let err = result.expect_err("detect() must fail on non-macOS hosts (NFR-C1)");
+    // Accept either UnsupportedHardware (chip brand string mismatch — fires
+    // on hosts where `sysctl` runs but returns a non-Apple brand) or the two
+    // exec-failed variants (fires on hosts where `sysctl` is absent or its
+    // MIB is unknown — typical Linux). Both are valid NFR-C1 surfaces.
+    let rendered = err.to_string();
     assert!(
-        err.to_string().contains("unsupported"),
-        "non-macOS Display rendering {err:?} missing 'unsupported' substring"
+        rendered.contains("unsupported") || rendered.contains("execution failed"),
+        "non-macOS Display rendering {err:?} did not match either NFR-C1 surface"
     );
 }

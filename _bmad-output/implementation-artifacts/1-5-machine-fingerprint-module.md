@@ -1,6 +1,6 @@
 # Story 1.5: Machine fingerprint module
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -342,3 +342,14 @@ No conflicts detected.
 ### Completion Notes List
 
 ### File List
+
+### Review Findings
+
+Code review of branch `story/1-5-machine-fingerprint-module` vs `main` on 2026-05-06. Three review layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor) returned consistent signal; 12 findings triaged into 3 patches (applied), 3 deferred, 6 dismissed.
+
+- [x] [Review][Patch] Linux integration test substring assertion incompatible with `SysctlExecFailed` Display [tests/machine_fingerprint.rs:60] — broadened the assertion to accept either `"unsupported"` or `"execution failed"`; both are valid NFR-C1 surfaces depending on whether `sysctl` is present on the host.
+- [x] [Review][Patch] `SysctlExecFailed` / `IoregExecFailed` Display dropped underlying source [src/machine.rs:34, src/machine.rs:45] — added `: {source}` to both `#[error(...)]` templates so `err.to_string()` carries the real diagnostic without forcing callers to walk `.source()`.
+- [x] [Review][Patch] `parse_gpu_cores_from_ioreg` substring match too loose [src/machine/apple_silicon.rs:124] — gated on the quoted ioreg key `"\"gpu-core-count\""` so a hypothetical future ioreg key with `gpu-core-count` as a substring cannot collide.
+- [x] [Review][Defer] Multiple `gpu-core-count` lines on Mac Pro Ultra silently picks first — needs investigation on real multi-AGX hardware before a fix; first-match might already be the canonical SoC value.
+- [x] [Review][Defer] No subprocess timeout in `run_capture` — would need `tokio::time::timeout` (already in the locked feature set); defensive only, real binaries don't hang in practice.
+- [x] [Review][Defer] Boundary-input test gaps (BOM, embedded `\n`, u64 overflow, NBSP) — defensive coverage; production parsers reject these as `UnsupportedHardware` / `ParseError` already.

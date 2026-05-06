@@ -116,12 +116,15 @@ pub(crate) fn ram_bytes_to_gb(bytes: u64) -> u64 {
 
 /// Parse `ioreg -l` output and extract the `gpu-core-count` integer.
 ///
-/// Scans line-by-line for the substring `gpu-core-count`; on the first
-/// match, splits on `=` and parses the trimmed right-hand side as `u32`.
-/// `regex` is intentionally not used (out of the locked dependency set).
+/// Scans line-by-line for the quoted `ioreg` key `"gpu-core-count"`; on the
+/// first match, splits on `=` and parses the trimmed right-hand side as
+/// `u32`. The quotes are part of the match so a future ioreg key whose name
+/// happens to contain `gpu-core-count` as a substring (e.g. a hypothetical
+/// `gpu-core-count-helper`) cannot collide. `regex` is intentionally not
+/// used (out of the locked dependency set).
 pub(crate) fn parse_gpu_cores_from_ioreg(ioreg_output: &str) -> Result<u32, FingerprintError> {
     for line in ioreg_output.lines() {
-        if line.contains("gpu-core-count")
+        if line.contains("\"gpu-core-count\"")
             && let Some((_, value)) = line.split_once('=')
         {
             return value.trim().parse::<u32>().map_err(|e| {

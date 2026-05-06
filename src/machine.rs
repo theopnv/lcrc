@@ -31,7 +31,7 @@ pub enum FingerprintError {
     /// Underlying `sysctl` invocation failed (binary missing, non-zero
     /// exit, …). On Linux this fires when the binary is absent or the MIB
     /// is unknown.
-    #[error("sysctl execution failed")]
+    #[error("sysctl execution failed: {source}")]
     SysctlExecFailed {
         /// The underlying I/O error (or a synthetic one carrying the
         /// non-zero exit + stderr).
@@ -42,7 +42,7 @@ pub enum FingerprintError {
     /// Underlying `ioreg` invocation failed (binary missing, non-zero
     /// exit, …). macOS-only by construction; on non-macOS hosts this
     /// fires before [`apple_silicon::parse_gpu_cores_from_ioreg`] runs.
-    #[error("ioreg execution failed")]
+    #[error("ioreg execution failed: {source}")]
     IoregExecFailed {
         /// The underlying I/O error (or a synthetic one carrying the
         /// non-zero exit + stderr).
