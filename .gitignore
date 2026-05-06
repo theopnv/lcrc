@@ -18,3 +18,6 @@ _bmad/**/config.user.toml
 # ── BMad: generated artifacts (optional) ──
 # Uncomment if your team treats planning outputs as throwaway.
 # _bmad-output/
+
+# ── BMad: auto-orchestrator logs (scripts/bmad-auto.sh) ──
+.bmad-auto-logs/
