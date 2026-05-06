@@ -77,9 +77,14 @@ pub fn parse_and_dispatch() -> Result<(), crate::error::Error> {
     match cmd.try_get_matches() {
         Ok(matches) => {
             let cli = Cli::from_arg_matches(&matches).map_err(|e| {
+                // Route the diagnostic to stderr before mapping so the user
+                // sees what failed instead of a bare exit-code 10. clap's
+                // own usage errors take this same path via `handle_clap_error`.
+                let rendered = e.render().to_string();
+                crate::output::diag(rendered.trim_end());
                 crate::error::Error::Config(format!("invalid command-line arguments: {e}"))
             })?;
-            dispatch(cli)
+            dispatch(&cli)
         }
         Err(e) => handle_clap_error(&e),
     }
@@ -102,23 +107,25 @@ fn handle_clap_error(e: &clap::Error) -> Result<(), crate::error::Error> {
     }
 }
 
-fn dispatch(cli: Cli) -> Result<(), crate::error::Error> {
+fn dispatch(cli: &Cli) -> Result<(), crate::error::Error> {
     // Subscriber install is idempotent at the user-visible level: a second
     // `try_init` call across a process is `Err(TryInitError)` and harmless.
     let _ = crate::util::tracing::init();
-    match cli.command {
+    match &cli.command {
         Some(Command::Scan(_)) => scan::run(),
         Some(Command::Show(_)) => show::run(),
         Some(Command::Verify(_)) => verify::run(),
-        None => render_root_help(),
+        None => {
+            render_root_help();
+            Ok(())
+        }
     }
 }
 
-fn render_root_help() -> Result<(), crate::error::Error> {
+fn render_root_help() {
     let mut cmd = Cli::command().long_version(crate::version::long_version_static());
     let rendered = cmd.render_long_help().to_string();
     crate::output::result(rendered.trim_end());
-    Ok(())
 }
 
 #[cfg(test)]

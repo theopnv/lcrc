@@ -62,12 +62,17 @@ fn per_subcommand_help_works() {
 }
 
 #[test]
-fn version_cold_under_200ms() {
-    // Run three times and take the minimum to absorb scheduler jitter on
-    // shared CI runners. The AC measures cold (page-cache cleared) latency;
-    // tests run after `cargo build` so the page cache is warm — the warm
-    // budget is necessarily ≤ the cold budget, so this remains a valid
-    // upper-bound check. Documented in Completion Notes.
+fn version_warm_under_200ms() {
+    // AC5 (NFR-P7) is a *cold* (page-cache cleared) latency budget. Tests
+    // run after `cargo build`, so the binary's pages are warm — warm wall
+    // time is a *lower bound* on cold wall time, not an upper bound.
+    // A warm pass therefore does not prove the cold AC; a warm regression
+    // *does* prove the cold AC fails. This test gates the easy direction
+    // (warm > 200 ms ⇒ cold > 200 ms) and the manual measurement in T8.5
+    // (recorded in Completion Notes) covers the cold ground truth.
+    //
+    // We sample three times and take the min to absorb scheduler jitter on
+    // shared CI runners.
     let mut samples = Vec::with_capacity(3);
     for _ in 0..3 {
         let start = Instant::now();
@@ -78,10 +83,14 @@ fn version_cold_under_200ms() {
             .code(0);
         samples.push(start.elapsed());
     }
-    let min = samples.iter().min().copied().unwrap_or(Duration::ZERO);
+    let min = samples
+        .iter()
+        .min()
+        .copied()
+        .expect("loop runs 3 iterations, samples is non-empty");
     assert!(
         min < Duration::from_millis(200),
-        "min wall time {min:?} exceeds NFR-P7 budget of 200 ms (samples: {samples:?})"
+        "min warm wall time {min:?} exceeds NFR-P7 budget of 200 ms (samples: {samples:?})"
     );
 }
 
