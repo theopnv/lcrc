@@ -261,7 +261,8 @@ gh_pr_create_with_retry() {
     local existing
     existing=$(gh pr list --head "$branch" --base "$base" --state open --json url -q '.[0].url' 2>/dev/null || echo "")
     if [[ -n "$existing" ]]; then
-      log "  pr create: PR already exists for $branch (server-side success): $existing"
+      # log() goes to stdout, which is captured by the caller. Use stderr.
+      warn "  pr create: PR already exists for $branch (server-side success): $existing"
       printf '%s\n' "$existing"
       return 0
     fi
@@ -390,12 +391,10 @@ Constraints:
 # the next story spins up.
 # ─────────────────────────────────────────────────────────────
 generate_friction_report() {
-  local story_key="$1" branch="$2"
-  local report_path="$LOG_DIR/friction-${story_key}.md"
+  local story_key="$1" branch="$2" report_path="$3"
 
   if $DRY_RUN; then
     log "  [dry-run] would generate friction report at $report_path"
-    printf '%s\n' "$report_path"
     return 0
   fi
 
@@ -447,8 +446,6 @@ Be terse. Operator will scan in 30 seconds. Do NOT speculate; only report what i
     printf '# Friction report — story %s\n\n## Summary\nReport generation failed; inspect %s manually.\n' \
       "$story_key" "$LOG_DIR" > "$report_path"
   fi
-
-  printf '%s\n' "$report_path"
 }
 
 pause_for_operator() {
@@ -553,8 +550,8 @@ Unattended run — do not ask for confirmation."
   # operator can address surfaced issues (blocked permissions, conflicting
   # reviews, spec ambiguity) before more automation runs against this
   # story or the next one. Dry-run path inside each helper.
-  local report_path
-  report_path=$(generate_friction_report "$story_key" "$branch")
+  local report_path="$LOG_DIR/friction-${story_key}.md"
+  generate_friction_report "$story_key" "$branch" "$report_path"
   pause_for_operator "$report_path" "$story_key"
 
   # 6. PR open, CI watch, merge.
