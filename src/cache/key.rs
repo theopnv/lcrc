@@ -55,8 +55,11 @@ pub struct BackendInfo {
 }
 
 /// Errors returned by helpers in this module.
-#[derive(Debug, Error)]
+// `module_name_repetitions` fires because the type is `KeyError` inside `key`;
+// the name is part of the public surface (re-exported as `key::KeyError`) and
+// renaming it (e.g. to `Error`) would collide with `crate::error::Error`.
 #[allow(clippy::module_name_repetitions)]
+#[derive(Debug, Error)]
 pub enum KeyError {
     /// File open or read failure inside [`model_sha`].
     #[error("failed to read model file '{}' for model_sha: {source}", path.display())]
@@ -70,9 +73,11 @@ pub enum KeyError {
 
     /// Canonical-JSON encoding failure inside [`params_hash`].
     ///
-    /// Unreachable in practice for the current four-field [`Params`] shape;
-    /// the `Result` is preserved because workspace lints forbid
-    /// `unwrap`/`expect` outside tests and `serde_json` returns `Result`.
+    /// Reachable when [`Params::temp`] is not finite — `serde_json` rejects
+    /// `NaN` and `±∞` because JSON cannot represent them. For finite inputs in
+    /// the documented `0.0..=2.0` range the encoder is infallible. The
+    /// `Result` is preserved regardless because workspace lints forbid
+    /// `unwrap`/`expect` outside tests.
     #[error("failed to canonicalize params for params_hash: {source}")]
     ParamsHashSerialize {
         /// Underlying serializer error.
@@ -122,10 +127,9 @@ pub async fn model_sha(path: &Path) -> Result<String, KeyError> {
 ///
 /// # Errors
 ///
-/// Returns [`KeyError::ParamsHashSerialize`] if `serde_json` fails to encode
-/// the value. Unreachable in practice for the current [`Params`] shape; the
-/// `Result` is preserved because workspace lints forbid `unwrap`/`expect`
-/// outside tests.
+/// Returns [`KeyError::ParamsHashSerialize`] when [`Params::temp`] is not
+/// finite (`NaN` / `±∞`); JSON cannot represent those values. For finite
+/// inputs in the documented `0.0..=2.0` range the encoder is infallible.
 pub fn params_hash(params: &Params) -> Result<String, KeyError> {
     // The `to_value` → `to_string` round-trip is load-bearing: a direct
     // `serde_json::to_string(params)` uses `serialize_struct`, which preserves
@@ -182,6 +186,19 @@ mod tests {
         assert_eq!(
             digest,
             "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447"
+        );
+    }
+
+    #[tokio::test]
+    async fn model_sha_empty_file() {
+        // Zero-length file: the read loop body never executes, so the hash
+        // collapses to `Sha256::digest(b"")`. Pinning this guards against a
+        // future refactor that finalizes inside the loop instead of after.
+        let tf = write_temp(b"");
+        let digest = model_sha(tf.path()).await.unwrap();
+        assert_eq!(
+            digest,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         );
     }
 

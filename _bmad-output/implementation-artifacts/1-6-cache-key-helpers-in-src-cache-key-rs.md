@@ -1,6 +1,6 @@
 # Story 1.6: Cache key helpers in `src/cache/key.rs`
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -414,3 +414,17 @@ claude-opus-4-7 (1M context)
 - 2026-05-06 — Story 1.6 implementation complete; status → review. Authored `src/cache.rs` and `src/cache/key.rs` with the four canonical PK-component helpers + 11 in-module unit tests. Added `serde_json = "1"` direct dep (no new transitives). All local CI gates green (build, fmt, clippy `-D warnings`, 64 tests, AC4 grep).
 
 ### Review Findings
+
+Reviewers: Blind Hunter (diff-only), Edge Case Hunter (diff + project read), Acceptance Auditor (diff + spec). All ACs (1–5) verified by the Acceptance Auditor. Patches applied inline in this same commit; deferred items recorded in `deferred-work.md`.
+
+- [x] [Review][Patch] Drop forward-reference planning-meta from `src/cache.rs` module doc [src/cache.rs:1] — "future submodules (`schema`, `migrations`, `cell`, `query`) layer SQLite storage…" violates CLAUDE.md HIGH-PRECEDENCE "Comments explain WHY, never planning meta" (the rule explicitly forbids "lands in a later story"-style soft phrasings). Replaced with a `key`-only summary.
+- [x] [Review][Patch] Correct `KeyError::ParamsHashSerialize` "unreachable in practice" claim [src/cache/key.rs:71-75, 124-128] — `serde_json` rejects `f32::NAN` and `±∞` (JSON cannot represent them), so the variant IS reachable when `Params::temp` is non-finite. Both the variant doc and the `# Errors` rustdoc on `params_hash` now describe the real trigger.
+- [x] [Review][Patch] Justify the `#[allow(clippy::module_name_repetitions)]` on `KeyError` [src/cache/key.rs:58-60] — bare `#[allow]` violates the "lint suppressions need a why-comment" rule. Added a comment explaining the rename collision with `crate::error::Error`.
+- [x] [Review][Patch] Add `model_sha` empty-file test [src/cache/key.rs] — boundary case where the read loop body never executes; pinned to the well-known `e3b0c44298fc1c14…b855` digest. Guards against a future refactor that finalizes inside the loop instead of after.
+- [x] [Review][Defer] No `Params::temp.is_finite()` validation before serialization — current behavior surfaces `ParamsHashSerialize` (now correctly documented), which is acceptable; adding pre-validation is a behavior/API decision better deferred to the consumer story (Story 1.8) that owns the call site.
+- [x] [Review][Defer] No timeout / regular-file gate / size-cap on `model_sha` (DoS surface for `/dev/zero`, FIFOs, FUSE-hangs) — explicitly out of scope per spec (validation belongs at the source / orchestrator layer, Story 2.13).
+- [x] [Review][Defer] `backend_build` separator-collision possibility (e.g. `name` containing `-` or `+` collides with `semver` having the inverse) — explicitly out of scope per spec; validation belongs at the `Backend::version()` source (Story 2.1).
+- [x] [Review][Defer] Additional error-path tests for `model_sha` (EISDIR, EACCES, mid-stream EIO, symlink-to-missing-target) — single Display-substring assertion is the contract; per-errno coverage is low-value compared to deferring to integration scope.
+- [x] [Review][Defer] `serde_json/preserve_order` feature-unification risk (a future transitive could silently flip `Map` from `BTreeMap` to `IndexMap`) — pinned-digest test would catch the silent change but with a generic "digest mismatch" message; a build-time guard (`cfg!(feature = "preserve_order")` static assert) would be a better belt-and-suspenders. Track in maintenance backlog rather than in this story.
+- [x] [Review][Defer] `#[non_exhaustive]` on `Params` / `BackendInfo` / `KeyError` — adding a field to `Params` silently invalidates every cached cell (no compile-time fence); the pinned-digest test catches it. Real fix is the consumer story's wrapper or a schema-version bump policy, deferred to Story 1.8 / NFR-R3 work.
+- [x] [Review][Defer] `BufReader` over a 64 KiB user buffer is suboptimal vs. `BufReader::with_capacity(64*1024, file)` — micro-perf, not a correctness issue; the streaming-vs-bulk equivalence test pins behavior. Defer.
