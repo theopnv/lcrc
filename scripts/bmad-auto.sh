@@ -133,9 +133,11 @@ invoke_claude() {
   fi
   local args=(--print --permission-mode "$CLAUDE_PERMISSION_MODE")
   [[ -n "$CLAUDE_MODEL" ]] && args+=(--model "$CLAUDE_MODEL")
-  # Capture stdout+stderr to log AND echo a tail at end so operator sees progress.
-  if ! claude "${args[@]}" "$prompt" >"$logfile" 2>&1; then
-    err "claude failed (exit $?). Tail of log:"
+  # Stream live to stdout AND capture to log. PIPESTATUS preserves claude's exit code.
+  local rc=0
+  claude "${args[@]}" "$prompt" 2>&1 | tee "$logfile" || rc=${PIPESTATUS[0]}
+  if (( rc != 0 )); then
+    err "claude failed (exit $rc). Tail of log:"
     tail -n 40 "$logfile" >&2 || true
     die "claude invocation failed: $label"
   fi

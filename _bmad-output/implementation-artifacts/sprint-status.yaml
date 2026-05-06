@@ -47,7 +47,7 @@ development_status:
   1-1-project-scaffold-with-locked-workspace-lints: review
   1-2-ci-workflow-gates-fmt-clippy-and-tests: review
   1-3-output-module-full-exitcode-enum-error-layer: review
-  1-4-clap-cli-root-lcrc-version-lcrc-help-tracing-subscriber: ready-for-dev
+  1-4-clap-cli-root-lcrc-version-lcrc-help-tracing-subscriber: review
   1-5-machine-fingerprint-module: backlog
   1-6-cache-key-helpers-in-src-cache-key-rs: backlog
   1-7-sqlite-schema-migrations-framework: backlog

@@ -2,15 +2,19 @@
 
 #![cfg_attr(not(test), forbid(unsafe_code))]
 
+pub mod cli;
 pub mod error;
 pub mod exit_code;
 pub mod output;
+pub mod util;
+pub mod version;
 
-/// No-op orchestrator entry point.
+/// Parse the CLI and dispatch to the matched subcommand.
 ///
 /// # Errors
 ///
-/// Returns an [`error::Error`] when the orchestrator fails.
+/// Errors from clap parse-failure or subcommand execution propagate to
+/// `main.rs` for exit-code mapping.
 pub fn run() -> Result<(), error::Error> {
-    Ok(())
+    cli::parse_and_dispatch()
 }
