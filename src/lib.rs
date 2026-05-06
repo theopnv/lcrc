@@ -2,6 +2,7 @@
 
 #![cfg_attr(not(test), forbid(unsafe_code))]
 
+pub mod cache;
 pub mod cli;
 pub mod error;
 pub mod exit_code;

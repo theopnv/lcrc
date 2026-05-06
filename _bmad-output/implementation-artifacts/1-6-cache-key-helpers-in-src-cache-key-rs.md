@@ -1,6 +1,6 @@
 # Story 1.6: Cache key helpers in `src/cache/key.rs`
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -34,46 +34,46 @@ so that no agent computes them inline and inconsistently (per the "single source
 
 ## Tasks / Subtasks
 
-- [ ] **T1. Add `serde_json` dependency to `Cargo.toml`** (AC: 2)
-  - [ ] T1.1 Append `serde_json = "1"` to the `[dependencies]` table, alphabetized between `serde_derive` and `toml` (the existing TOML group). Default features only — `preserve_order` must stay OFF so `serde_json::Map` remains a `BTreeMap` alias and produces sorted-key output. Do not add `[dev-dependencies]` or any other crate.
-  - [ ] T1.2 Run `cargo build` locally; confirm `Cargo.lock` updates with one new transitive set (`serde_json` + `itoa` + `ryu`); commit `Cargo.lock`.
+- [x] **T1. Add `serde_json` dependency to `Cargo.toml`** (AC: 2)
+  - [x] T1.1 Append `serde_json = "1"` to the `[dependencies]` table, alphabetized between `serde_derive` and `toml` (the existing TOML group). Default features only — `preserve_order` must stay OFF so `serde_json::Map` remains a `BTreeMap` alias and produces sorted-key output. Do not add `[dev-dependencies]` or any other crate.
+  - [x] T1.2 Run `cargo build` locally; confirm `Cargo.lock` updates with one new transitive set (`serde_json` + `itoa` + `ryu`); commit `Cargo.lock`.
 
-- [ ] **T2. Author `src/cache.rs`** (AC: 1, 2, 3, 4, 5)
-  - [ ] T2.1 Create `src/cache.rs` as the parent file-as-module per AR-26. File-level `//!` doc explains: this is the `cache` module root; the `key` submodule owns canonical PK-component derivation; future stories add `schema`, `migrations`, `cell`, `query` submodules per architecture §"Complete Project Directory Structure".
-  - [ ] T2.2 Declare `pub mod key;` — single line. No other items.
+- [x] **T2. Author `src/cache.rs`** (AC: 1, 2, 3, 4, 5)
+  - [x] T2.1 Create `src/cache.rs` as the parent file-as-module per AR-26. File-level `//!` doc explains: this is the `cache` module root; the `key` submodule owns canonical PK-component derivation; future stories add `schema`, `migrations`, `cell`, `query` submodules per architecture §"Complete Project Directory Structure".
+  - [x] T2.2 Declare `pub mod key;` — single line. No other items.
 
-- [ ] **T3. Author `src/cache/key.rs` — types** (AC: 2, 3)
-  - [ ] T3.1 Define `pub struct Params { pub ctx: u32, pub temp: f32, pub threads: u32, pub n_gpu_layers: u32 }` with `#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]`. `///` doc on the struct + each field.
+- [x] **T3. Author `src/cache/key.rs` — types** (AC: 2, 3)
+  - [x] T3.1 Define `pub struct Params { pub ctx: u32, pub temp: f32, pub threads: u32, pub n_gpu_layers: u32 }` with `#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]`. `///` doc on the struct + each field.
     - Field types match `llama-server` API conventions: `ctx` is positive context-window length (u32), `temp` is sampling temperature (f32, range 0.0..=2.0 in practice), `threads` is CPU thread count (u32), `n_gpu_layers` is layers offloaded to GPU (u32; `0` = CPU-only, `u32::MAX`-equivalent ≈ "all" handled by Story 2.1's backend wiring).
     - **Do not** derive `serde::Deserialize` — there is no current deserialization call site (`Cargo.toml` and TOML config schema are owned by Story 6.1+); deriving now creates dead surface area.
     - **Do not** derive `Hash`/`Ord`/`Eq` — `Eq` is impossible for `f32`; lookup is via the canonical hex digest, not the struct.
-  - [ ] T3.2 Define `pub struct BackendInfo { pub name: String, pub semver: String, pub commit_short: String }` with `#[derive(Debug, Clone, PartialEq, Eq)]`. `///` doc on the struct + each field.
+  - [x] T3.2 Define `pub struct BackendInfo { pub name: String, pub semver: String, pub commit_short: String }` with `#[derive(Debug, Clone, PartialEq, Eq)]`. `///` doc on the struct + each field.
     - `name` is a backend identifier slug (e.g., `"llama.cpp"`); `semver` is the build's semver string (e.g., `"b3791"` for llama.cpp build numbers); `commit_short` is the 7-char git short-SHA (e.g., `"a1b2c3d"`).
     - **Do not** derive `serde::Serialize` / `Deserialize` — `BackendInfo` is constructed from `Backend::version()` (Story 2.1) and consumed only by `key::backend_build`; no JSON / TOML round-trip is required.
     - **Do not** add a `Display` impl — the formatting belongs to `key::backend_build`, not to the data type. A `Display` impl would let a future caller bypass the `key` module by `format!("{info}")` — silently equivalent today, but a foothold for divergence the moment any quoting / escaping rule changes.
-  - [ ] T3.3 Define a `KeyError` typed-error enum via `thiserror::Error`. Variants:
+  - [x] T3.3 Define a `KeyError` typed-error enum via `thiserror::Error`. Variants:
     - `ModelShaIo { path: PathBuf, source: std::io::Error }` — file open / read failure for `model_sha`. `Display`: `"failed to read model file '{path}' for model_sha: {source}"`.
     - `ParamsHashSerialize { source: serde_json::Error }` — canonical-JSON encoding failure for `params_hash`. Realistically unreachable for the four-field `Params` today, but `serde_json` returns `Result` and AR-27 forbids `unwrap`/`expect` outside tests. `Display`: `"failed to canonicalize params for params_hash: {source}"`.
     - **Do not** add a third variant for `backend_build` — the function is infallible (`String` formatting cannot fail) and adding a never-used variant invites future authors to wire fake fail paths.
     - **Do not** add `From<KeyError> for crate::error::Error`. The two boundary conversions (`Other(anyhow::Error)` is the catch-all today) are wired by the consumer story (Story 1.8 cell writer / Story 1.12 wiring); pre-adding them creates dead API surface and forces a mapping decision (`Preflight` vs. a new variant) before the call site exists. Same rationale Story 1.5 used for `FingerprintError`.
 
-- [ ] **T4. Author `src/cache/key.rs` — `model_sha(path)`** (AC: 1, 4)
-  - [ ] T4.1 Signature: `pub async fn model_sha(path: &std::path::Path) -> Result<String, KeyError>`.
+- [x] **T4. Author `src/cache/key.rs` — `model_sha(path)`** (AC: 1, 4)
+  - [x] T4.1 Signature: `pub async fn model_sha(path: &std::path::Path) -> Result<String, KeyError>`.
     - Async because file I/O goes through `tokio::fs` (AR-3). Return type is the lowercase hex digest as a `String` (no `[u8; 32]` wrapper type — the cache PK column is `TEXT`, and `hex::encode`-style construction inline is two lines).
-  - [ ] T4.2 Implementation: open the file with `tokio::fs::File::open(path).await`, wrap in a `tokio::io::BufReader`, allocate one fixed buffer (`[0u8; 64 * 1024]` — 64 KiB is the established Rust streaming-hash buffer size, balances syscall count vs. cache footprint), loop `read(&mut buf).await` until 0 bytes, feed each chunk into `sha2::Sha256::update`, finalize, format as lowercase hex.
+  - [x] T4.2 Implementation: open the file with `tokio::fs::File::open(path).await`, wrap in a `tokio::io::BufReader`, allocate one fixed buffer (`[0u8; 64 * 1024]` — 64 KiB is the established Rust streaming-hash buffer size, balances syscall count vs. cache footprint), loop `read(&mut buf).await` until 0 bytes, feed each chunk into `sha2::Sha256::update`, finalize, format as lowercase hex.
     - **Do not** use `tokio::fs::read(path).await` (full-file load — violates AC1).
     - **Do not** use `std::fs::File` + `std::io::copy` (sync I/O — violates AR-3).
     - **Do not** memory-map the file (`memmap2` is not in the locked dep set per AR-4; mmap also tickles macOS sandbox quirks Story 1.10 doesn't want to inherit).
     - **Do not** add a progress-reporting hook here. GGUF files are 1–50 GB; a quick mental math says ~2 GB/s SHA-256 throughput on Apple Silicon → 0.5–25 s per file. Streaming-progress UX is wired by Story 2.13 at the orchestrator layer, not at the hashing primitive.
-  - [ ] T4.3 Hex formatting: use `format!` with the `{:02x}` width-pad specifier looped over the 32 output bytes (or the equivalent `Sha256::digest`-then-`hex::encode` pattern). **Do not** add the `hex` crate (not in the locked set per AR-4); the inline `format!` loop is 3 lines and idiomatic.
-  - [ ] T4.4 Error mapping: every `?` in the function body propagates either `tokio::fs::File::open` or `tokio::io::AsyncReadExt::read` errors as `std::io::Error` and converts via `.map_err(|source| KeyError::ModelShaIo { path: path.to_path_buf(), source })?`. Do not use a blanket `From<std::io::Error> for KeyError` — same reasoning as Story 1.5's `FingerprintError`: a blanket `From` would let a future call site convert any I/O error into `ModelShaIo` even when the I/O came from somewhere else.
-  - [ ] T4.5 Add `# Errors` rustdoc section listing `KeyError::ModelShaIo`, satisfying clippy `missing_errors_doc`.
+  - [x] T4.3 Hex formatting: use `format!` with the `{:02x}` width-pad specifier looped over the 32 output bytes (or the equivalent `Sha256::digest`-then-`hex::encode` pattern). **Do not** add the `hex` crate (not in the locked set per AR-4); the inline `format!` loop is 3 lines and idiomatic.
+  - [x] T4.4 Error mapping: every `?` in the function body propagates either `tokio::fs::File::open` or `tokio::io::AsyncReadExt::read` errors as `std::io::Error` and converts via `.map_err(|source| KeyError::ModelShaIo { path: path.to_path_buf(), source })?`. Do not use a blanket `From<std::io::Error> for KeyError` — same reasoning as Story 1.5's `FingerprintError`: a blanket `From` would let a future call site convert any I/O error into `ModelShaIo` even when the I/O came from somewhere else.
+  - [x] T4.5 Add `# Errors` rustdoc section listing `KeyError::ModelShaIo`, satisfying clippy `missing_errors_doc`.
 
-- [ ] **T5. Author `src/cache/key.rs` — `params_hash(&params)`** (AC: 2, 4)
-  - [ ] T5.1 Signature: `pub fn params_hash(params: &Params) -> Result<String, KeyError>`.
+- [x] **T5. Author `src/cache/key.rs` — `params_hash(&params)`** (AC: 2, 4)
+  - [x] T5.1 Signature: `pub fn params_hash(params: &Params) -> Result<String, KeyError>`.
     - Sync because no I/O. Returns a 64-char lowercase hex digest as `String`.
     - Take `&Params`, not `Params` by value (clippy `needless_pass_by_value` would otherwise fire — see Story 1.5 review findings § Patch 2 carryover lesson).
-  - [ ] T5.2 Implementation:
+  - [x] T5.2 Implementation:
     ```rust
     let value = serde_json::to_value(params).map_err(|source| KeyError::ParamsHashSerialize { source })?;
     let canonical = serde_json::to_string(&value).map_err(|source| KeyError::ParamsHashSerialize { source })?;
@@ -81,52 +81,52 @@ so that no agent computes them inline and inconsistently (per the "single source
     Ok(hex_lowercase(&digest))
     ```
     where `hex_lowercase` is the same `format!("{:02x}", b)`-loop helper from T4.3, factored to a private `fn hex_lowercase(bytes: &[u8]) -> String` near the top of the file.
-  - [ ] T5.3 The two-step `to_value → to_string` round-trip is **load-bearing for canonicalization**: `serde_json::Value::Object` wraps `serde_json::Map`, which is a `BTreeMap<String, Value>` alias when `preserve_order` is OFF (the default we lock in T1.1). Re-serializing the `Value` therefore emits keys in alphabetical order regardless of `Params`'s struct-declaration order. **Do not** call `serde_json::to_string(params)` directly — that uses `serialize_struct`, which preserves field-declaration order, NOT alphabetical, and would silently corrupt cache keys if a future maintainer reorders fields.
-  - [ ] T5.4 Add `# Errors` rustdoc section listing `KeyError::ParamsHashSerialize` with the note "infallible in practice for the current `Params` shape; Result preserved because AR-27 forbids unwrap/expect outside tests".
+  - [x] T5.3 The two-step `to_value → to_string` round-trip is **load-bearing for canonicalization**: `serde_json::Value::Object` wraps `serde_json::Map`, which is a `BTreeMap<String, Value>` alias when `preserve_order` is OFF (the default we lock in T1.1). Re-serializing the `Value` therefore emits keys in alphabetical order regardless of `Params`'s struct-declaration order. **Do not** call `serde_json::to_string(params)` directly — that uses `serialize_struct`, which preserves field-declaration order, NOT alphabetical, and would silently corrupt cache keys if a future maintainer reorders fields.
+  - [x] T5.4 Add `# Errors` rustdoc section listing `KeyError::ParamsHashSerialize` with the note "infallible in practice for the current `Params` shape; Result preserved because AR-27 forbids unwrap/expect outside tests".
 
-- [ ] **T6. Author `src/cache/key.rs` — `backend_build(&info)`** (AC: 3, 4)
-  - [ ] T6.1 Signature: `pub fn backend_build(info: &BackendInfo) -> String`.
+- [x] **T6. Author `src/cache/key.rs` — `backend_build(&info)`** (AC: 3, 4)
+  - [x] T6.1 Signature: `pub fn backend_build(info: &BackendInfo) -> String`.
     - Infallible — `format!` does not return `Result`. No `KeyError` variant for this function (see T3.3).
     - Take `&BackendInfo` for the same `needless_pass_by_value` reasoning as T5.1.
-  - [ ] T6.2 Body: `format!("{}-{}+{}", info.name, info.semver, info.commit_short)`. Single line. No `# Errors` doc section (no `Result` return).
-  - [ ] T6.3 **Do not** sanity-check `info.commit_short.len() == 7` or strip whitespace — the input is constructed by `Backend::version()` (Story 2.1) which owns its own format contract; cache-key derivation is a pure formatter, not a validator. Validation belongs at the source.
+  - [x] T6.2 Body: `format!("{}-{}+{}", info.name, info.semver, info.commit_short)`. Single line. No `# Errors` doc section (no `Result` return).
+  - [x] T6.3 **Do not** sanity-check `info.commit_short.len() == 7` or strip whitespace — the input is constructed by `Backend::version()` (Story 2.1) which owns its own format contract; cache-key derivation is a pure formatter, not a validator. Validation belongs at the source.
 
-- [ ] **T7. Author `src/cache/key.rs` — `machine_fingerprint(&fp)`** (AC: 5, 4)
-  - [ ] T7.1 Signature: `pub fn machine_fingerprint(fp: &crate::machine::MachineFingerprint) -> String`.
+- [x] **T7. Author `src/cache/key.rs` — `machine_fingerprint(&fp)`** (AC: 5, 4)
+  - [x] T7.1 Signature: `pub fn machine_fingerprint(fp: &crate::machine::MachineFingerprint) -> String`.
     - Infallible — borrows the canonical string from the wrapped `MachineFingerprint` and clones it.
-  - [ ] T7.2 Body: `fp.as_str().to_string()`. Single line. The `MachineFingerprint` type owns the `format!("{chip}-{ram_gb}GB-{gpu_cores}gpu")` invariant (Story 1.5 § "Architecture compliance"); this helper is the documented integration point that Story 1.5 deferred.
-  - [ ] T7.3 **Do not** add a method on `MachineFingerprint` itself (e.g., `fn to_cache_key(&self) -> String`). Story 1.5 § "Resolved decisions" explicitly forbade pre-adding it. The `key` module is the single owner of "code that builds cache-PK column values"; widening `MachineFingerprint`'s API to include cache concerns muddies the boundary.
+  - [x] T7.2 Body: `fp.as_str().to_string()`. Single line. The `MachineFingerprint` type owns the `format!("{chip}-{ram_gb}GB-{gpu_cores}gpu")` invariant (Story 1.5 § "Architecture compliance"); this helper is the documented integration point that Story 1.5 deferred.
+  - [x] T7.3 **Do not** add a method on `MachineFingerprint` itself (e.g., `fn to_cache_key(&self) -> String`). Story 1.5 § "Resolved decisions" explicitly forbade pre-adding it. The `key` module is the single owner of "code that builds cache-PK column values"; widening `MachineFingerprint`'s API to include cache concerns muddies the boundary.
 
-- [ ] **T8. In-module unit tests in `src/cache/key.rs`** (AC: 1, 2, 3, 5)
-  - [ ] T8.1 File-end test module: `#[cfg(test)] #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] mod tests { ... }` (matches Stories 1.3 / 1.4 / 1.5 pattern).
-  - [ ] T8.2 `model_sha` tests:
+- [x] **T8. In-module unit tests in `src/cache/key.rs`** (AC: 1, 2, 3, 5)
+  - [x] T8.1 File-end test module: `#[cfg(test)] #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] mod tests { ... }` (matches Stories 1.3 / 1.4 / 1.5 pattern).
+  - [x] T8.2 `model_sha` tests:
     - Hashing a temp-file with known content (e.g., the bytes `b"hello world\n"`) returns the known SHA-256 hex digest `a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447` — pin the well-known fixture so the test is reviewable without running it.
     - Hashing a 1 MiB synthetic file (`vec![0xab; 1024 * 1024]`) is consistent with `Sha256::digest` of the same buffer in-memory (round-trip equivalence — the streaming and bulk paths must agree).
     - Hashing a 200 KiB file (well past the 64 KiB buffer boundary) confirms the multi-chunk loop terminates and accumulates correctly.
     - Hashing a non-existent path returns `Err(KeyError::ModelShaIo { .. })` whose `Display` contains the literal substring `"failed to read model file"` (Display contract pin per Story 1.5 § AC3 lesson).
     - Use `tempfile::NamedTempFile` for the on-disk fixtures (`tempfile` is locked in `Cargo.toml` line 53). All `model_sha` tests are `#[tokio::test]` (the function is async).
-  - [ ] T8.3 `params_hash` tests:
+  - [x] T8.3 `params_hash` tests:
     - Two `Params` instances constructed in different field orders (`Params { ctx: 4096, temp: 0.2, threads: 8, n_gpu_layers: 99 }` vs. an identical `Params` re-built field-by-field) hash identically.
     - The hex output is exactly 64 chars and only `[0-9a-f]` (regex-free check via `s.chars().all(|c| c.is_ascii_hexdigit() && (!c.is_ascii_alphabetic() || c.is_ascii_lowercase()))`).
     - A pinned reference fixture: `Params { ctx: 4096, temp: 0.2, threads: 8, n_gpu_layers: 99 }` produces a specific 64-char hex digest. **Compute the expected value once during dev** (write the `Params`, run the test once, paste the actual into the assertion) — the assertion then guards against any silent format change (key reordering, float rendering, etc.) that would break cache-key stability across lcrc versions. NFR-R3 (cache durable across patch upgrades) is the binding requirement this test pins.
     - Changing one field by an epsilon (`temp: 0.2` → `temp: 0.20000001f32`) produces a different digest — confirms `temp` participates in the hash.
-  - [ ] T8.4 `backend_build` tests:
+  - [x] T8.4 `backend_build` tests:
     - `BackendInfo { name: "llama.cpp".into(), semver: "b3791".into(), commit_short: "a1b2c3d".into() }` formats to exactly `"llama.cpp-b3791+a1b2c3d"` (the architecture's locked example string at architecture.md §"Cache Key Canonicalization").
     - Empty-field cases (`name: ""`, `semver: ""`) format to `"-+a1b2c3d"`-style strings without panicking. Document via comment that empty inputs are the *source*'s problem (Story 2.1 backend), not the formatter's.
-  - [ ] T8.5 `machine_fingerprint` test:
+  - [x] T8.5 `machine_fingerprint` test:
     - Construct a `MachineFingerprint` via `MachineFingerprint::from_canonical_string("M1Pro-32GB-14gpu".into())` (the `#[cfg(test)]` constructor Story 1.5 added at `src/machine.rs:106`) and assert `key::machine_fingerprint(&fp) == "M1Pro-32GB-14gpu"`.
     - This is the only test in this story that crosses module boundaries (`crate::machine::*`); document via comment that this is intentional — it pins the Story 1.5 → 1.6 contract in code.
 
-- [ ] **T9. Wire the `cache` module into the library** (AC: 4)
-  - [ ] T9.1 Edit `src/lib.rs`: insert `pub mod cache;` between `pub mod cli;` and `pub mod error;`, preserving the existing alphabetical ordering of the module declarations (`cli`, `error`, `exit_code`, `machine`, `output`, `util`, `version` → after edit: `cache`, `cli`, `error`, `exit_code`, `machine`, `output`, `util`, `version`).
-  - [ ] T9.2 Do **not** re-export `cache::key::*` at the crate root. Same Story 1.5 § "Anti-patterns" rule for `MachineFingerprint`: callers use the fully-qualified path `lcrc::cache::key::model_sha(...)`. Re-exports are a v1-API-surface-locking decision; defer to Epic 6's polish story.
+- [x] **T9. Wire the `cache` module into the library** (AC: 4)
+  - [x] T9.1 Edit `src/lib.rs`: insert `pub mod cache;` between `pub mod cli;` and `pub mod error;`, preserving the existing alphabetical ordering of the module declarations (`cli`, `error`, `exit_code`, `machine`, `output`, `util`, `version` → after edit: `cache`, `cli`, `error`, `exit_code`, `machine`, `output`, `util`, `version`).
+  - [x] T9.2 Do **not** re-export `cache::key::*` at the crate root. Same Story 1.5 § "Anti-patterns" rule for `MachineFingerprint`: callers use the fully-qualified path `lcrc::cache::key::model_sha(...)`. Re-exports are a v1-API-surface-locking decision; defer to Epic 6's polish story.
 
-- [ ] **T10. Local CI mirror** (AC: 1, 2, 3, 4, 5)
-  - [ ] T10.1 Run `cargo build` — confirms the new module compiles and `Cargo.lock` adds `serde_json` + transitives only.
-  - [ ] T10.2 Run `cargo fmt` — apply rustfmt; commit any reformatted lines.
-  - [ ] T10.3 Run `cargo clippy --all-targets --all-features -- -D warnings` locally (Story 1.4 review surfaced two clippy gates that were masked because clippy was permission-blocked in the dev session — local mirror is not optional).
-  - [ ] T10.4 Run `cargo test` — confirms all in-module tests in `src/cache/key.rs::tests` pass and the existing `tests/cli_*.rs` + `tests/machine_fingerprint.rs` integration tests still pass.
-  - [ ] T10.5 Manual grep AC4 check: `git grep -nE 'model_sha|params_hash|backend_build' src/ tests/ | grep -v '^src/cache/key.rs:' | grep -v '^_bmad-output/' | grep -v 'tests/.*key' ` — every remaining line must be either (a) a `///` doc-comment / module-level `//!` cross-reference (rare in this story; only Story 1.5's existing `src/machine.rs:71` comment about Story 1.6 qualifies), or (b) absent (no match). If any inline `format!`/`Sha256::digest(...)` call site exists outside `src/cache/key.rs`, that's an AC4 failure.
+- [x] **T10. Local CI mirror** (AC: 1, 2, 3, 4, 5)
+  - [x] T10.1 Run `cargo build` — confirms the new module compiles and `Cargo.lock` adds `serde_json` + transitives only.
+  - [x] T10.2 Run `cargo fmt` — apply rustfmt; commit any reformatted lines.
+  - [x] T10.3 Run `cargo clippy --all-targets --all-features -- -D warnings` locally (Story 1.4 review surfaced two clippy gates that were masked because clippy was permission-blocked in the dev session — local mirror is not optional).
+  - [x] T10.4 Run `cargo test` — confirms all in-module tests in `src/cache/key.rs::tests` pass and the existing `tests/cli_*.rs` + `tests/machine_fingerprint.rs` integration tests still pass.
+  - [x] T10.5 Manual grep AC4 check: `git grep -nE 'model_sha|params_hash|backend_build' src/ tests/ | grep -v '^src/cache/key.rs:' | grep -v '^_bmad-output/' | grep -v 'tests/.*key' ` — every remaining line must be either (a) a `///` doc-comment / module-level `//!` cross-reference (rare in this story; only Story 1.5's existing `src/machine.rs:71` comment about Story 1.6 qualifies), or (b) absent (no match). If any inline `format!`/`Sha256::digest(...)` call site exists outside `src/cache/key.rs`, that's an AC4 failure.
 
 ## Dev Notes
 
@@ -378,12 +378,39 @@ No conflicts detected between this story's plan and the existing codebase or pla
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-opus-4-7 (1M context)
 
 ### Debug Log References
 
+- `cargo build` after adding `serde_json = "1"`: clean; `Cargo.lock` gained one dep line under `lcrc` (`serde_json` was already pulled in transitively by `figment`, so no new crates compiled).
+- First `cargo test --lib cache::key::tests` run: `params_hash_pinned_reference_digest` failed against the placeholder, surfacing the actual digest `932f844986b8c9c2ce2cfa6ec95181c49e11861e86e035ef4833cce947904e42` for `Params { ctx: 4096, temp: 0.2, threads: 8, n_gpu_layers: 99 }`. Pinned in source.
+- First `cargo clippy --all-targets --all-features -- -D warnings` run: one `clippy::doc_markdown` error on `src/cache.rs` line 4 ("SQLite" needs backticks); `cargo fmt --check` flagged three formatting deltas in `src/cache/key.rs` (line wrapping). Both fixed in one pass.
+- Second clippy + test run: green; full `cargo test` = 64 passed across 6 suites.
+
 ### Completion Notes List
 
+- AC1 (`model_sha`): streaming SHA-256 via `tokio::fs::File::open` + `BufReader` + 64 KiB chunked `read` loop into `Sha256::update`; lowercase hex via inline `format!("{:02x}", b)` loop. No full-file load, no sync I/O, no `hex` dep.
+- AC2 (`params_hash`): `serde_json::to_value` → `to_string` round-trip routes through `Map` (BTreeMap-backed because `serde_json/preserve_order` is OFF in default features), guaranteeing alphabetical key order regardless of `Params` field declaration order. Pinned-digest test guards NFR-R3 (cache durable across patch upgrades).
+- AC3 (`backend_build`): `format!("{}-{}+{}", info.name, info.semver, info.commit_short)`. Infallible; no `KeyError` variant; no `Display` impl on `BackendInfo` (preserves AC4 single-source-of-truth).
+- AC4 (single source of truth): `git grep -nE 'model_sha|params_hash|backend_build' src/ tests/` finds matches only inside `src/cache/key.rs` and as cross-reference doc comments in `src/cache.rs`. No inline computation outside the owner module.
+- AC5 (`machine_fingerprint`): delegates to `MachineFingerprint::as_str().to_string()`; cross-module test pins the Story 1.5 ↔ 1.6 contract using the `from_canonical_string` `#[cfg(test)]` constructor.
+- 11 in-module unit tests authored (4 `#[tokio::test]` + 7 sync `#[test]`), red-green-refactor cycle followed: pinned-digest test was first written with a placeholder constant, then updated with the captured digest (`932f844986b8c9c2ce2cfa6ec95181c49e11861e86e035ef4833cce947904e42`).
+- Two intentional deviations from the story task text, both noted via `WHY` comments in the test source:
+  - T8.3 epsilon test uses `temp: 0.21` instead of the spec's `0.20000001f32`. The literal `0.20000001f32` rounds to the same f32 bit pattern as `0.2_f32` (the f32 gap at 0.2 is ~1.5e-8), so the spec value would not actually differ. `0.21` is unambiguously a distinct f32 and exercises the same intent: confirm `temp` participates in the canonical encoding.
+  - `KeyError` carries `#[allow(clippy::module_name_repetitions)]` because pedantic clippy flags `KeyError` against parent module `key`. Story spec mandates the `KeyError` name; the allow is the minimal scoped suppression.
+- `Cargo.lock` change: one additional dependency line (`+ "serde_json",`) under the `lcrc` package; no new transitive crates downloaded.
+- Local CI mirror (T10): `cargo build` ✅, `cargo fmt --check` ✅, `cargo clippy --all-targets --all-features -- -D warnings` ✅, `cargo test` = 64 passed (6 suites). AC4 grep ✅.
+
 ### File List
+
+- `Cargo.toml` — modified (added `serde_json = "1"`, alphabetized between `serde_derive` and `toml`)
+- `Cargo.lock` — modified (one new dep entry under `lcrc`; `serde_json`/`itoa`/`ryu` were already present transitively)
+- `src/lib.rs` — modified (inserted `pub mod cache;` between `pub mod cli;` and `pub mod error;`)
+- `src/cache.rs` — added (parent module file: `pub mod key;` + `//!` module-level doc)
+- `src/cache/key.rs` — added (`Params`, `BackendInfo`, `KeyError`; `model_sha`/`params_hash`/`backend_build`/`machine_fingerprint`; private `hex_lowercase` helper; in-module `tests` block with 11 tests)
+
+### Change Log
+
+- 2026-05-06 — Story 1.6 implementation complete; status → review. Authored `src/cache.rs` and `src/cache/key.rs` with the four canonical PK-component helpers + 11 in-module unit tests. Added `serde_json = "1"` direct dep (no new transitives). All local CI gates green (build, fmt, clippy `-D warnings`, 64 tests, AC4 grep).
 
 ### Review Findings
