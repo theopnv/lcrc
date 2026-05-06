@@ -1,16 +1,9 @@
-//! `cli` — the clap-derive CLI root.
-//!
-//! Declares the [`Cli`] parser, the [`Command`] subcommand enum, and the
-//! [`parse_and_dispatch`] helper that `lcrc::run` calls. The four subcommand
-//! modules live in `src/cli/`; this file owns the top-level parser and the
-//! dispatch boundary.
-//!
-//! Process-exit policy: clap's default `parse()` and `get_matches()` both
-//! call `std::process::exit` internally. To preserve the
-//! "single `process::exit` call site lives in `src/main.rs`" invariant, this
-//! module uses `try_get_matches`, captures any `clap::Error` (including the
-//! `--help` and `--version` non-error paths), routes the rendered output
-//! through [`crate::output`], and returns a typed [`crate::error::Error`].
+//! Process-exit invariant: clap's default `parse()`/`get_matches()` call
+//! `std::process::exit` internally. To keep `process::exit` confined to
+//! `src/main.rs`, this module uses `try_get_matches`, captures every
+//! `clap::Error` (including the `--help` and `--version` non-error paths),
+//! routes the rendered output through [`crate::output`], and returns a
+//! typed [`crate::error::Error`].
 
 pub mod scan;
 pub mod show;
@@ -18,11 +11,8 @@ pub mod verify;
 
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 
-/// Top-level CLI parser.
-///
-/// `command` is `Option<Command>` so `lcrc` with no subcommand is not a clap
-/// parse error — the no-args path renders help to stdout and exits 0,
-/// preserving `tests/cli_exit_codes.rs::ok_path_exits_0`.
+/// `command` is `Option<Command>` so the no-args invocation is not a clap
+/// parse error — it renders help to stdout and exits 0.
 #[derive(Debug, Parser)]
 #[command(
     name = "lcrc",
@@ -30,13 +20,12 @@ use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
     long_about = None,
 )]
 pub struct Cli {
-    /// The chosen subcommand, if any.
+    /// Selected subcommand, if any.
     #[command(subcommand)]
     pub command: Option<Command>,
 }
 
-/// Subcommand surface. Each variant carries a unit args struct that grows
-/// flags in later stories owned by their respective epics.
+/// Top-level `lcrc` subcommands.
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Run a measurement scan against installed models.
@@ -47,26 +36,22 @@ pub enum Command {
     Verify(VerifyArgs),
 }
 
-/// `scan` subcommand arguments. Empty in this story; flags like `--depth`,
-/// `--model`, `--quiet`, `--report-path` land in their owner stories.
+/// Arguments for `lcrc scan`.
 #[derive(Debug, Args)]
 pub struct ScanArgs {}
 
-/// `show` subcommand arguments. Empty in this story; populated in Epic 4.
+/// Arguments for `lcrc show`.
 #[derive(Debug, Args)]
 pub struct ShowArgs {}
 
-/// `verify` subcommand arguments. Empty in this story; populated in Epic 5.
+/// Arguments for `lcrc verify`.
 #[derive(Debug, Args)]
 pub struct VerifyArgs {}
 
-/// Parse `std::env::args` and dispatch to the chosen subcommand.
-///
-/// `--help` and `--version` surface as `Err(clap::Error)` whose `kind()` is
+/// `--help` and `--version` arrive as `Err(clap::Error)` with kind
 /// `DisplayHelp`/`DisplayVersion`; both are routed to stdout via
 /// [`crate::output::result`] and return `Ok(())`. Real usage errors render
-/// to stderr via [`crate::output::diag`] and map to
-/// [`crate::error::Error::Config`] (→ exit code 10).
+/// to stderr and map to [`crate::error::Error::Config`] (→ exit code 10).
 ///
 /// # Errors
 ///

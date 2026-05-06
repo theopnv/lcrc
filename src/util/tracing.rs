@@ -1,13 +1,10 @@
-//! `util::tracing` — install the global `tracing-subscriber`.
-//!
-//! Architecture spec: §"Tracing / Logging" + §"stdout / stderr Discipline"
-//! (FR46). Events go to **stderr** because stdout is dedicated to results
-//! that downstream tools (e.g. `lcrc show --format json | jq`) consume.
+//! Events go to **stderr** because stdout is reserved for results that
+//! downstream tools (e.g. `lcrc show --format json | jq`) consume.
 //!
 //! Only `src/output.rs` and the subscriber installed here may write to
-//! stderr or stdout. Any module that needs to emit a user-visible
-//! diagnostic from this story onward should use `tracing::info!` /
-//! `tracing::warn!`; the subscriber routes the event to stderr.
+//! stderr or stdout. User-visible diagnostics elsewhere should use
+//! `tracing::info!` / `tracing::warn!`; the subscriber routes the event
+//! to stderr.
 
 use std::io::{self, IsTerminal};
 
@@ -20,7 +17,7 @@ use tracing_subscriber::{
 
 /// Build and install the global tracing subscriber.
 ///
-/// - Writer: `std::io::stderr` (FR46 stderr discipline).
+/// - Writer: `std::io::stderr`.
 /// - Level: read from `RUST_LOG` env var; default `INFO`.
 /// - Format: module-pathed target rendered on every event; ANSI when
 ///   stderr is a TTY.
