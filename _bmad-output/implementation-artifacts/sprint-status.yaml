@@ -1,5 +1,6 @@
 # generated: 2026-04-30
 # last_updated: 2026-05-06
+# (1-5-machine-fingerprint-module: backlog → ready-for-dev on 2026-05-06)
 # (last_updated reflects most recent story-status change)
 # project: lcrc
 # project_key: NOKEY
@@ -48,7 +49,7 @@ development_status:
   1-2-ci-workflow-gates-fmt-clippy-and-tests: review
   1-3-output-module-full-exitcode-enum-error-layer: review
   1-4-clap-cli-root-lcrc-version-lcrc-help-tracing-subscriber: done
-  1-5-machine-fingerprint-module: backlog
+  1-5-machine-fingerprint-module: ready-for-dev
   1-6-cache-key-helpers-in-src-cache-key-rs: backlog
   1-7-sqlite-schema-migrations-framework: backlog
   1-8-cache-cell-write-read-api-with-atomic-semantics: backlog
