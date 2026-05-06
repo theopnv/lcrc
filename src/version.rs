@@ -1,10 +1,7 @@
-//! `version` — single source of truth for `lcrc --version` rendering.
-//!
-//! The long-form output is the 5-line self-attestation block from the
-//! architecture spec: a header line `lcrc <semver> (build <commit-short>)`
-//! followed by four indented field rows describing the task source, harness,
-//! backend, and container image. Fields not yet pinned render as the literal
-//! string `"unknown"`; Story 6.6 swaps each placeholder for its real source.
+//! Long-form `--version` output: a header line
+//! `lcrc <semver> (build <commit-short>)` followed by four indented field
+//! rows (task source, harness, backend, container). Fields whose source is
+//! not yet wired render as the literal string `"unknown"`.
 
 use std::sync::OnceLock;
 
@@ -16,15 +13,12 @@ pub const LCRC_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_COMMIT: &str = env!("LCRC_BUILD_COMMIT");
 
 /// Vendored task-source revision (e.g. `tasks/swe-bench-pro/version`).
-/// Owned by Story 6.6, which swaps `"unknown"` for the real read.
 pub const TASK_SOURCE_VERSION: &str = "unknown";
 
 /// Bundled harness revision (e.g. `image/requirements.txt`).
-/// Owned by Story 6.6.
 pub const HARNESS_VERSION: &str = "unknown";
 
-/// GHCR container image digest (`src/constants.rs`).
-/// Owned by Story 6.6 once the image is pinned.
+/// GHCR container image digest.
 pub const CONTAINER_DIGEST: &str = "unknown";
 
 /// Render the 5-line `--version` self-attestation block.
