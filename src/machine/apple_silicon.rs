@@ -60,11 +60,36 @@ impl Chip {
 
 /// Parse the output of `sysctl -n machdep.cpu.brand_string` into a [`Chip`].
 ///
-/// Apple Silicon brand strings are of the form `"Apple M<N>[ <Variant>]"`
-/// (e.g. `"Apple M1"`, `"Apple M1 Pro"`). The space inside the suffix is
-/// collapsed in the canonical token so `"Apple M1 Pro"` → [`Chip::M1Pro`]
-/// (token `"M1Pro"`, NOT `"M1 Pro"`).
+/// Apple Silicon brand strings are of the form `"Apple M<N>[ <Variant>][ <decoration>]"`
+/// where `<decoration>` may be appended on virtualized hosts (e.g. GitHub
+/// Actions `macos-14` runners report `"Apple M1 (Virtual)"`) or by future
+/// macOS releases. We therefore match the chip family by **prefix** after
+/// stripping the leading `"Apple "`, ordered longest-first so `"M1 Pro"` is
+/// tried before bare `"M1"`. The space inside the suffix is collapsed in the
+/// canonical token so `"Apple M1 Pro"` → [`Chip::M1Pro`] (token `"M1Pro"`).
+///
+/// Cache semantics: virtualized chips share the bare chip's cache cells —
+/// the underlying silicon and ISA are identical, so any cached result is
+/// equally valid on either.
 pub(crate) fn parse_chip(brand_string: &str) -> Result<Chip, FingerprintError> {
+    // Longest-first so e.g. `"M1 Ultra ..."` is not misclassified as `M1`.
+    const PREFIXES: &[(&str, Chip)] = &[
+        ("M1 Ultra", Chip::M1Ultra),
+        ("M1 Pro", Chip::M1Pro),
+        ("M1 Max", Chip::M1Max),
+        ("M1", Chip::M1),
+        ("M2 Ultra", Chip::M2Ultra),
+        ("M2 Pro", Chip::M2Pro),
+        ("M2 Max", Chip::M2Max),
+        ("M2", Chip::M2),
+        ("M3 Pro", Chip::M3Pro),
+        ("M3 Max", Chip::M3Max),
+        ("M3", Chip::M3),
+        ("M4 Pro", Chip::M4Pro),
+        ("M4 Max", Chip::M4Max),
+        ("M4", Chip::M4),
+    ];
+
     let trimmed = brand_string.trim();
     let suffix =
         trimmed
@@ -72,28 +97,24 @@ pub(crate) fn parse_chip(brand_string: &str) -> Result<Chip, FingerprintError> {
             .ok_or_else(|| FingerprintError::UnsupportedHardware {
                 reason: format!("unsupported chip brand string: {brand_string:?}"),
             })?;
-    let chip = match suffix {
-        "M1" => Chip::M1,
-        "M1 Pro" => Chip::M1Pro,
-        "M1 Max" => Chip::M1Max,
-        "M1 Ultra" => Chip::M1Ultra,
-        "M2" => Chip::M2,
-        "M2 Pro" => Chip::M2Pro,
-        "M2 Max" => Chip::M2Max,
-        "M2 Ultra" => Chip::M2Ultra,
-        "M3" => Chip::M3,
-        "M3 Pro" => Chip::M3Pro,
-        "M3 Max" => Chip::M3Max,
-        "M4" => Chip::M4,
-        "M4 Pro" => Chip::M4Pro,
-        "M4 Max" => Chip::M4Max,
-        _ => {
-            return Err(FingerprintError::UnsupportedHardware {
-                reason: format!("unsupported chip brand string: {brand_string:?}"),
-            });
+    for (prefix, chip) in PREFIXES {
+        let Some(after) = suffix.strip_prefix(prefix) else {
+            continue;
+        };
+        // Reject `"M11"` / `"M1Pro"` / `"M1X"`: anything following the chip
+        // family token must be either end-of-string or a non-alphanumeric
+        // boundary (space before a variant or decoration).
+        if after
+            .chars()
+            .next()
+            .is_none_or(|c| !c.is_ascii_alphanumeric())
+        {
+            return Ok(*chip);
         }
-    };
-    Ok(chip)
+    }
+    Err(FingerprintError::UnsupportedHardware {
+        reason: format!("unsupported chip brand string: {brand_string:?}"),
+    })
 }
 
 /// Parse the output of `sysctl -n hw.memsize` into a byte count.
@@ -270,6 +291,22 @@ mod tests {
         let err = parse_chip("Apple M99 Hyperthreaded").expect_err("unknown must reject");
         assert!(matches!(err, FingerprintError::UnsupportedHardware { .. }));
         assert!(err.to_string().contains("unsupported"));
+    }
+
+    #[test]
+    fn parse_chip_accepts_virtualized_suffix() {
+        // GitHub Actions `macos-14` runners report this exact brand string;
+        // virtualized hosts collapse to the bare-chip token.
+        assert_eq!(parse_chip("Apple M1 (Virtual)").unwrap(), Chip::M1);
+        assert_eq!(parse_chip("Apple M2 Pro (Virtual)").unwrap(), Chip::M2Pro);
+        assert_eq!(parse_chip("Apple M3 Max (Virtual)\n").unwrap(), Chip::M3Max);
+    }
+
+    #[test]
+    fn parse_chip_rejects_alphanumeric_run_on() {
+        // Boundary check: `Apple M11` must not match `M1` despite the prefix.
+        let err = parse_chip("Apple M11").expect_err("M11 must reject");
+        assert!(matches!(err, FingerprintError::UnsupportedHardware { .. }));
     }
 
     #[test]
