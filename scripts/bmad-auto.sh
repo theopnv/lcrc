@@ -58,7 +58,8 @@ Flags:
 Env overrides: BMAD_SPRINT_FILE, BMAD_STORIES_DIR, BMAD_MAIN_BRANCH,
   BMAD_MAX_HEAL_ATTEMPTS, BMAD_CLAUDE_PERMISSION_MODE, BMAD_CLAUDE_MODEL,
   BMAD_LOG_DIR, BMAD_CI_WATCH_INTERVAL, BMAD_GH_RETRY_MAX,
-  BMAD_GH_RETRY_INITIAL_DELAY.
+  BMAD_GH_RETRY_INITIAL_DELAY, BMAD_NO_CAFFEINATE (set to skip the
+  macOS caffeinate wrapper that keeps the host awake during the run).
 EOF
 }
 
@@ -612,6 +613,14 @@ Do not block on missing user input."
 # Main loop
 # ─────────────────────────────────────────────────────────────
 main() {
+  # Prevent the host from sleeping mid-run. macOS will otherwise suspend the
+  # claude/git/gh processes and silently truncate captured logs.
+  if [[ "$OSTYPE" == darwin* ]] && [[ -z "${BMAD_NO_CAFFEINATE:-}" ]] \
+      && [[ -z "${BMAD_CAFFEINATED:-}" ]] && command -v caffeinate >/dev/null; then
+    export BMAD_CAFFEINATED=1
+    exec caffeinate -i -s "$0" "$@"
+  fi
+
   ensure_clean_worktree
   while true; do
     sync_main

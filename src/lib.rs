@@ -5,6 +5,7 @@
 pub mod cli;
 pub mod error;
 pub mod exit_code;
+pub mod machine;
 pub mod output;
 pub mod util;
 pub mod version;
