@@ -12,6 +12,16 @@ milestone to make the deadline enforceable outside BMad context.
 
 ---
 
+## Deferred from: code review of 1-6-cache-key-helpers-in-src-cache-key-rs (2026-05-06)
+
+- **No `Params::temp.is_finite()` validation in `params_hash`.** Non-finite `temp` values (NaN, ±∞) produce `KeyError::ParamsHashSerialize` (now correctly documented). Pre-validation would let consumers surface a clearer "invalid temp" diagnostic rather than a serializer error. Defer to Story 1.8 (the first consumer that decides UX policy on bad `Params`).
+- **No DoS-guard on `model_sha`** (regular-file check, max-size cap, or `tokio::time::timeout`): hashing `/dev/zero`, a FIFO, or a FUSE-hung mount blocks indefinitely. Spec is explicit that source-side validation owns this; the orchestrator (Story 2.13) is the right wiring point.
+- **`backend_build` separator collisions** — `name`/`semver`/`commit_short` containing `-` or `+` produce ambiguous output. Spec defers validation to `Backend::version()` (Story 2.1).
+- **Additional `model_sha` error-path tests** (EISDIR, EACCES, mid-stream EIO, symlink-to-missing-target): single Display-substring assertion is the contract today; per-errno tests would belt-and-suspenders the variant carrying the symlink path vs. the resolved path. Low value vs. deferring to integration.
+- **`serde_json/preserve_order` feature-unification static guard.** A future transitive enabling `preserve_order` would silently flip `Map` from `BTreeMap` to `IndexMap` and break canonical encoding. Pinned-digest test catches it with a generic message; an explicit build-time `cfg!`-static-assert would point future maintainers at the actual cause.
+- **`#[non_exhaustive]` on `Params` / `BackendInfo` / `KeyError`.** Adding a field to `Params` silently invalidates every cached cell — pinned-digest test catches it generically. Schema-versioning / API-versioning policy is owned by Story 1.8 + NFR-R3 work, not by the primitive author.
+- **`BufReader::with_capacity(64*1024, file)` vs. wrapping in default-8 KiB BufReader and reading into a 64 KiB user buffer.** Micro-perf, not correctness; streaming-vs-bulk equivalence test pins behavior. Pick up in a `bmad-quick-dev` pass if any future profiling flags it.
+
 ## Deferred from: code review of 1-5-machine-fingerprint-module (2026-05-06)
 
 - **Multiple `gpu-core-count` lines on multi-AGX hosts (Mac Pro Ultra) silently picks first.** `parse_gpu_cores_from_ioreg` (`src/machine/apple_silicon.rs:122`) returns the first line that matches the quoted ioreg key. On a Mac Pro / Ultra with multiple IOAccelerator nodes, the wrong number could end up in the canonical fingerprint. Needs investigation on real hardware before a fix — first-match might already be the canonical SoC value depending on ioreg traversal order. If it isn't, the fix is to scan all matches and either de-dup or take max.
