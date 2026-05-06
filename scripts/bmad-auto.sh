@@ -31,11 +31,14 @@ CLAUDE_PERMISSION_MODE="${BMAD_CLAUDE_PERMISSION_MODE:-acceptEdits}"
 CLAUDE_MODEL="${BMAD_CLAUDE_MODEL:-}"   # empty = inherit user default
 LOG_DIR="${BMAD_LOG_DIR:-.bmad-auto-logs}"
 CI_WATCH_INTERVAL="${BMAD_CI_WATCH_INTERVAL:-30}"
+GH_RETRY_MAX="${BMAD_GH_RETRY_MAX:-5}"
+GH_RETRY_INITIAL_DELAY="${BMAD_GH_RETRY_INITIAL_DELAY:-5}"
 
 DRY_RUN=false
 ONCE=false
 SKIP_REVIEW=false
 SKIP_RETRO=false
+NO_PAUSE=false
 
 # ─────────────────────────────────────────────────────────────
 # Args
@@ -49,11 +52,13 @@ Flags:
   --once           Process at most one story, then stop.
   --skip-review    Skip the bmad-code-review step.
   --skip-retro     Skip the retrospective at epic boundary.
+  --no-pause       Do not pause for operator review after each story.
   -h, --help       Show this message.
 
 Env overrides: BMAD_SPRINT_FILE, BMAD_STORIES_DIR, BMAD_MAIN_BRANCH,
   BMAD_MAX_HEAL_ATTEMPTS, BMAD_CLAUDE_PERMISSION_MODE, BMAD_CLAUDE_MODEL,
-  BMAD_LOG_DIR, BMAD_CI_WATCH_INTERVAL.
+  BMAD_LOG_DIR, BMAD_CI_WATCH_INTERVAL, BMAD_GH_RETRY_MAX,
+  BMAD_GH_RETRY_INITIAL_DELAY.
 EOF
 }
 
@@ -63,6 +68,7 @@ while [[ $# -gt 0 ]]; do
     --once)        ONCE=true; shift ;;
     --skip-review) SKIP_REVIEW=true; shift ;;
     --skip-retro)  SKIP_RETRO=true; shift ;;
+    --no-pause)    NO_PAUSE=true; shift ;;
     -h|--help)     usage; exit 0 ;;
     *)             echo "unknown arg: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -180,6 +186,144 @@ commit_all_if_changes() {
 }
 
 # ─────────────────────────────────────────────────────────────
+# Transient-failure retry helpers
+#
+# GitHub's API (REST + GraphQL) returns occasional 5xx and timeouts; without
+# retries those propagate through `set -e` and abort an otherwise-healthy run.
+# `retry_cmd` is for idempotent operations; `gh_pr_create_with_retry` and
+# `gh_pr_merge_with_retry` add an idempotency check (server may have processed
+# the mutation before the response was lost).
+# ─────────────────────────────────────────────────────────────
+# Pull a useful one-liner out of stderr captured during a failed gh/git call.
+# Recognises common shapes: "HTTP 5xx: ...", "GraphQL: ...", "gh: ...",
+# response-body `"message": "..."` fields, and curl-style timeout messages.
+extract_gh_error() {
+  local file="$1"
+  {
+    grep -E '^(HTTP [0-9]{3}|GraphQL:|gh:|fatal:|error:)' "$file" 2>/dev/null
+    grep -oE '"message"[[:space:]]*:[[:space:]]*"[^"]+"' "$file" 2>/dev/null | head -2
+    grep -iE 'timeout|timed out|connection (refused|reset)' "$file" 2>/dev/null | head -1
+  } | head -5 | tr '\n' '|' | sed 's/|$//; s/|/ ┊ /g'
+}
+
+# Returns 0 on transient signal in stderr (5xx, timeout, network), 1 otherwise.
+is_transient_failure() {
+  local file="$1"
+  grep -qiE 'HTTP 5[0-9]{2}|HTTP 429|gateway timeout|service unavailable|timed out|timeout|connection (refused|reset)|temporarily unavailable|EAI_AGAIN' "$file" 2>/dev/null
+}
+
+# retry_cmd <max_attempts> <initial_delay_seconds> <label> <cmd...>
+# For idempotent commands only. Captures stderr, prints it live on each
+# attempt, and surfaces a parsed error line on retry/give-up.
+retry_cmd() {
+  local max="$1" delay="$2" label="$3"
+  shift 3
+  local attempt=1 rc=0 err_file
+  err_file=$(mktemp)
+  trap 'rm -f "$err_file"' RETURN
+  while (( attempt <= max )); do
+    rc=0
+    "$@" 2> >(tee "$err_file" >&2) || rc=$?
+    if (( rc == 0 )); then
+      return 0
+    fi
+    local detail
+    detail=$(extract_gh_error "$err_file")
+    if (( attempt == max )) || ! is_transient_failure "$err_file"; then
+      err "$label: failed (rc=$rc, attempt $attempt/$max). ${detail:+Detail: $detail}"
+      return $rc
+    fi
+    warn "$label: transient failure (rc=$rc, attempt $attempt/$max). ${detail:+Detail: $detail} Retrying in ${delay}s…"
+    sleep "$delay"
+    delay=$(( delay * 2 ))
+    attempt=$(( attempt + 1 ))
+  done
+  return $rc
+}
+
+# gh pr create with retry + idempotency check (PR may have been created
+# server-side before the response failed). Echoes the PR URL on stdout.
+gh_pr_create_with_retry() {
+  local base="$1" branch="$2" title="$3" body="$4"
+  local max="$GH_RETRY_MAX" delay="$GH_RETRY_INITIAL_DELAY"
+  local attempt=1 rc=0 err_file out
+  err_file=$(mktemp)
+  trap 'rm -f "$err_file"' RETURN
+  while (( attempt <= max )); do
+    rc=0
+    out=$(gh pr create --base "$base" --head "$branch" --title "$title" --body "$body" 2> "$err_file") || rc=$?
+    cat "$err_file" >&2
+    if (( rc == 0 )); then
+      printf '%s\n' "$out"
+      return 0
+    fi
+    # Idempotency: did the PR get created server-side?
+    local existing
+    existing=$(gh pr list --head "$branch" --base "$base" --state open --json url -q '.[0].url' 2>/dev/null || echo "")
+    if [[ -n "$existing" ]]; then
+      log "  pr create: PR already exists for $branch (server-side success): $existing"
+      printf '%s\n' "$existing"
+      return 0
+    fi
+    local detail
+    detail=$(extract_gh_error "$err_file")
+    if (( attempt == max )) || ! is_transient_failure "$err_file"; then
+      err "pr create: failed (rc=$rc, attempt $attempt/$max). ${detail:+Detail: $detail}"
+      return $rc
+    fi
+    warn "pr create: transient failure (rc=$rc, attempt $attempt/$max). ${detail:+Detail: $detail} Retrying in ${delay}s…"
+    sleep "$delay"
+    delay=$(( delay * 2 ))
+    attempt=$(( attempt + 1 ))
+  done
+  return $rc
+}
+
+# gh pr merge with retry + idempotency check. The merge mutation may have
+# completed server-side even when the client saw a 5xx; check `state` before
+# re-attempting and clean up the branch separately if needed.
+gh_pr_merge_with_retry() {
+  local pr_url="$1" pr_title="$2"
+  local max="$GH_RETRY_MAX" delay="$GH_RETRY_INITIAL_DELAY"
+  local attempt=1 rc=0 err_file
+  err_file=$(mktemp)
+  trap 'rm -f "$err_file"' RETURN
+  while (( attempt <= max )); do
+    rc=0
+    gh pr merge "$pr_url" --squash --delete-branch --subject "$pr_title" 2> "$err_file" || rc=$?
+    cat "$err_file" >&2
+    if (( rc == 0 )); then
+      return 0
+    fi
+    # Idempotency: state may already be MERGED.
+    local state
+    state=$(gh pr view "$pr_url" --json state -q .state 2>/dev/null || echo "")
+    if [[ "$state" == "MERGED" ]]; then
+      log "  pr merge: server-side success despite client error (state=MERGED)"
+      local head_ref
+      head_ref=$(gh pr view "$pr_url" --json headRefName -q .headRefName 2>/dev/null || echo "")
+      if [[ -n "$head_ref" ]]; then
+        gh api -X DELETE "repos/{owner}/{repo}/git/refs/heads/$head_ref" 2>/dev/null \
+          && log "  pr merge: deleted stale branch $head_ref" \
+          || log "  pr merge: branch $head_ref already gone (or could not be deleted)"
+      fi
+      return 0
+    fi
+    local detail
+    detail=$(extract_gh_error "$err_file")
+    if (( attempt == max )) || ! is_transient_failure "$err_file"; then
+      err "pr merge: failed (rc=$rc, attempt $attempt/$max). ${detail:+Detail: $detail}"
+      return $rc
+    fi
+    warn "pr merge: transient failure (rc=$rc, attempt $attempt/$max). ${detail:+Detail: $detail} Retrying in ${delay}s…"
+    sleep "$delay"
+    delay=$(( delay * 2 ))
+    attempt=$(( attempt + 1 ))
+  done
+  return $rc
+}
+
+# ─────────────────────────────────────────────────────────────
 # PR helpers
 # ─────────────────────────────────────────────────────────────
 extract_story_title() {
@@ -197,7 +341,10 @@ watch_ci_with_heal() {
   local attempts=0
   while true; do
     log "Watching CI on $pr_url"
-    if gh pr checks "$pr_url" --watch --interval "$CI_WATCH_INTERVAL"; then
+    # Wrap the watch in a small retry: a transient API blip during the
+    # streaming watch should not consume a self-heal attempt.
+    if retry_cmd 3 "$GH_RETRY_INITIAL_DELAY" "gh pr checks --watch" \
+        gh pr checks "$pr_url" --watch --interval "$CI_WATCH_INTERVAL"; then
       log "✓ CI green"
       return 0
     fi
@@ -226,11 +373,113 @@ Constraints:
 - Stay on branch ${branch}; do not create new branches.
 - Do not open new PRs; the existing PR (${pr_url}) is the target."
 
-    # If claude committed but didn't push, push now.
+    # If claude committed but didn't push, push now (with retry on transient
+    # network errors so a flaky push doesn't burn a heal attempt).
     if ! $DRY_RUN; then
-      git push 2>/dev/null || true
+      retry_cmd "$GH_RETRY_MAX" "$GH_RETRY_INITIAL_DELAY" "git push (heal)" git push || true
     fi
   done
+}
+
+# ─────────────────────────────────────────────────────────────
+# Friction report + operator pause
+#
+# After each story's main work is pushed, scan the run logs for things that
+# deserve operator attention (blocked Claude permissions, conflicting review
+# fixes, etc.) and pause the script so the operator can act on them before
+# the next story spins up.
+# ─────────────────────────────────────────────────────────────
+generate_friction_report() {
+  local story_key="$1" branch="$2"
+  local report_path="$LOG_DIR/friction-${story_key}.md"
+
+  if $DRY_RUN; then
+    log "  [dry-run] would generate friction report at $report_path"
+    printf '%s\n' "$report_path"
+    return 0
+  fi
+
+  # Resolve the per-story log files generated by invoke_claude this run.
+  local logs
+  logs=$(ls -1 "$LOG_DIR"/*"${story_key}"*.log 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//')
+  if [[ -z "$logs" ]]; then
+    warn "  friction report: no log files matched *${story_key}*.log; report will rely on git history alone"
+  fi
+
+  invoke_claude "friction-report-${story_key}" "Generate a concise friction report for story \`${story_key}\` (branch \`${branch}\`).
+
+WRITE THE REPORT TO: ${report_path}
+
+Sources to scan:
+- Claude invocation logs from this story: ${logs:-<none found>}
+- Story spec: ${STORIES_DIR}/${story_key}.md
+- Branch diff vs main: \`git diff ${MAIN_BRANCH}...${branch}\`
+- Branch commit history: \`git log --oneline ${MAIN_BRANCH}..${branch}\`
+
+Surface signals an operator should know about to improve the auto process:
+- **Blocked Claude commands / tools**: search logs for permission denials, \"I cannot run\", \"blocked\", tool denial messages, or repeated attempts at the same blocked operation. Each finding should suggest the specific permission to add to settings.json.
+- **Review/dev conflicts**: cases where bmad-code-review pushed back hard on bmad-dev-story choices (e.g. review-fix commits that reverted or substantially rewrote files dev had just touched). Quote the conflict succinctly.
+- **Test/build flakiness**: tests that failed and were re-run, or build errors that took multiple attempts to clear.
+- **Self-heal episodes**: any CI red → claude self-heal cycles, including which check failed and what the fix was.
+- **Spec ambiguity**: places where claude flagged ambiguity in the story file or made a notable assumption.
+- **Anything else**: surprising churn, unusual file-list growth, deviations from project conventions.
+
+Output structure:
+\`\`\`
+# Friction report — story ${story_key}
+
+## Summary
+One line: overall assessment.
+
+## Findings
+For each item, in priority order:
+- **Category**: permissions | review-conflict | test-flake | self-heal | spec-ambiguity | other
+- **What happened**: 1-2 sentence factual description with file:line or commit ref where possible
+- **Operator action**: concrete suggestion (e.g. \"add 'Bash(cargo nextest:*)' to .claude/settings.json permissions.allow\")
+\`\`\`
+
+If nothing notable surfaced, the entire body should be: \`## Summary\\nNo significant friction detected.\\n\`
+
+Be terse. Operator will scan in 30 seconds. Do NOT speculate; only report what is evidenced in the logs/diff/history."
+
+  if [[ ! -f "$report_path" ]]; then
+    warn "  friction report: claude did not produce $report_path; writing a placeholder"
+    printf '# Friction report — story %s\n\n## Summary\nReport generation failed; inspect %s manually.\n' \
+      "$story_key" "$LOG_DIR" > "$report_path"
+  fi
+
+  printf '%s\n' "$report_path"
+}
+
+pause_for_operator() {
+  local report_path="$1" story_key="$2"
+  if $NO_PAUSE; then
+    log "  --no-pause: skipping operator pause for $story_key (report at $report_path)"
+    return 0
+  fi
+  if $DRY_RUN; then
+    log "  [dry-run] would pause for operator after $story_key"
+    return 0
+  fi
+
+  printf '\n'
+  printf '\033[1;35m═══════════════════════════════════════════════════\033[0m\n' >&2
+  printf '\033[1;35m PAUSED for operator review — story %s\033[0m\n' "$story_key" >&2
+  printf '\033[1;35m═══════════════════════════════════════════════════\033[0m\n' >&2
+  printf ' Friction report: \033[1;36m%s\033[0m\n' "$report_path" >&2
+  if [[ -f "$report_path" ]]; then
+    printf '\n --- Report contents ---\n' >&2
+    sed 's/^/   /' "$report_path" >&2
+    printf ' --- End report ---\n\n' >&2
+  fi
+  printf ' Press \033[1;32mEnter\033[0m to continue (next: open PR + watch CI + merge), or \033[1;31mCtrl-C\033[0m to abort.\n' >&2
+  if [[ -t 0 ]]; then
+    read -r _
+  else
+    warn "  stdin is not a TTY; cannot pause interactively. Set --no-pause to acknowledge this is intentional."
+    die "no TTY for operator pause; aborting"
+  fi
+  log "Operator acknowledged; continuing."
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -291,14 +540,28 @@ Unattended run — do not ask for confirmation."
     commit_all_if_changes "review(${story_key}): address review feedback"
   fi
 
-  # 4. Push, PR, CI, merge.
+  # 4. Push.
   if $DRY_RUN; then
-    log "  [dry-run] would: push, gh pr create, watch CI, gh pr merge --squash --delete-branch"
-    return 0
+    log "  [dry-run] would: git push -u origin $branch (with retry on transient failures)"
+  else
+    log "Pushing $branch"
+    retry_cmd "$GH_RETRY_MAX" "$GH_RETRY_INITIAL_DELAY" "git push" \
+      git push -u origin "$branch"
   fi
 
-  log "Pushing $branch"
-  git push -u origin "$branch"
+  # 5. Friction report + operator pause. Generated after push so the
+  # operator can address surfaced issues (blocked permissions, conflicting
+  # reviews, spec ambiguity) before more automation runs against this
+  # story or the next one. Dry-run path inside each helper.
+  local report_path
+  report_path=$(generate_friction_report "$story_key" "$branch")
+  pause_for_operator "$report_path" "$story_key"
+
+  # 6. PR open, CI watch, merge.
+  if $DRY_RUN; then
+    log "  [dry-run] would: gh pr create (with idempotency retry), watch CI (with heal), gh pr merge --squash --delete-branch (with idempotency retry)"
+    return 0
+  fi
 
   local pr_title pr_body pr_url
   pr_title="$(extract_story_title "$story_file" "$story_key")"
@@ -308,14 +571,13 @@ Spec: \`${story_file}\`
 Generated by \`scripts/bmad-auto.sh\`."
 
   log "Opening PR (base=$MAIN_BRANCH)"
-  pr_url=$(gh pr create --base "$MAIN_BRANCH" --head "$branch" \
-    --title "$pr_title" --body "$pr_body")
+  pr_url=$(gh_pr_create_with_retry "$MAIN_BRANCH" "$branch" "$pr_title" "$pr_body")
   log "PR: $pr_url"
 
   watch_ci_with_heal "$pr_url" "$branch" "$story_key"
 
   log "Merging (squash, delete branch)"
-  gh pr merge "$pr_url" --squash --delete-branch --subject "$pr_title"
+  gh_pr_merge_with_retry "$pr_url" "$pr_title"
 
   log "✓ Story $story_key merged into $MAIN_BRANCH"
 }
