@@ -9,9 +9,22 @@
 #[cfg(target_os = "macos")]
 #[tokio::test]
 async fn detect_returns_apple_silicon_canonical_string() {
-    let fp = lcrc::machine::MachineFingerprint::detect()
-        .await
-        .expect("detect() must succeed on macOS Apple Silicon CI runner");
+    // GitHub Actions `macos-14` runners are virtualized Apple Silicon: the
+    // chip brand string parses (covered by unit tests) but ioreg does not
+    // expose `gpu-core-count` for the virtualized GPU. That is a legitimate
+    // `UnsupportedHardware` outcome for AC3 — accept it here so this test
+    // remains green on virtualized CI while still pinning the AC1 canonical
+    // structure when run on real hardware (dev's local rig).
+    let fp = match lcrc::machine::MachineFingerprint::detect().await {
+        Ok(fp) => fp,
+        Err(lcrc::machine::FingerprintError::UnsupportedHardware { reason })
+            if reason.contains("gpu-core-count") =>
+        {
+            eprintln!("skipping AC1 structural assertion on virtualized host: {reason}");
+            return;
+        }
+        Err(other) => panic!("detect() failed with non-virtualization error: {other:?}"),
+    };
     let canonical = fp.as_str();
 
     let parts: Vec<&str> = canonical.split('-').collect();
