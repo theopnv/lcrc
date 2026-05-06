@@ -1,15 +1,8 @@
-//! `lcrc` — local-only LLM coding-runtime comparison harness (binary entry point).
+//! `lcrc` — binary entry point.
 //!
-//! This is the **only** module in the crate that calls
-//! [`std::process::exit`]. All errors flow up here as [`lcrc::error::Error`],
-//! get rendered to the user via [`lcrc::output::diag`], and are then
-//! converted to an [`lcrc::exit_code::ExitCode`] before the process is
-//! surrendered. Future work that needs different exit semantics extends the
-//! `Error` enum and its `From` impls; it does **not** add a second
-//! `process::exit` call.
-//!
-//! The CLI parsing, tracing subscriber, and real `run()` body land in
-//! Story 1.4. This binary's body deliberately stays plumbing-only.
+//! Sole call site for [`std::process::exit`]: every other module returns
+//! `Result` so errors flow up here to be rendered and mapped to an exit code
+//! exactly once.
 
 fn main() {
     let code = match lcrc::run() {

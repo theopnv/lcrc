@@ -46,7 +46,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # Hashing / temp files / file locks
 sha2 = "0.10"
 tempfile = "3"
-fs2 = "0.4" # AR-4 permits fd-lock as a substitute
+fs2 = "0.4"
 
 # HTML report templating
 askama = "0.12"
@@ -65,7 +65,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 # Time / timestamps
 time = { version = "0.3", features = ["formatting", "macros"] }
 
-# GGUF parser (Option A per Story 1.1 T3.3 — handwritten fallback documented but not used)
+# GGUF parser
 ggus = "0.5"
 
 [dev-dependencies]
@@ -73,12 +73,6 @@ assert_cmd = "2"
 predicates = "3"
 insta = { version = "1", features = ["yaml"] }
 
-# Workspace lints (AR-27, architecture §"Rust Style Baseline").
-# Test modules opt out via:
-#   #[cfg(test)]
-#   #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-#   mod tests { ... }
-# applied per-file when tests are added.
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

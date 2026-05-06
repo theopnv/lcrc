@@ -1,16 +1,9 @@
-//! Integration tests for the FR45 process-exit contract.
+//! Integration tests for the process-exit contract.
 //!
-//! Two surfaces:
-//!
-//! 1. [`ok_path_exits_0`] — black-box invocation of the built `lcrc` binary
-//!    with no args, asserting exit code `0`. This is the first test that
-//!    has ever existed in this repo, so it doubles as the first real
-//!    exercise of Story 1.2's CI test gate (AC3).
-//! 2. [`exit_code_enum_full_contract`] — re-imports
-//!    [`lcrc::exit_code::ExitCode`] from the library crate and asserts every
-//!    variant's numeric discriminant matches the FR45 spec. Belt-and-braces
-//!    with the in-module test in `src/exit_code.rs`: this one would catch
-//!    accidental loss of `pub` visibility on the enum from `lib.rs`.
+//! [`exit_code_enum_full_contract`] re-imports [`lcrc::exit_code::ExitCode`]
+//! from the library crate and asserts every variant's discriminant — this
+//! catches accidental loss of `pub` visibility on the enum, which the
+//! in-module test in `src/exit_code.rs` cannot.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

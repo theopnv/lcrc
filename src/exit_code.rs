@@ -1,41 +1,36 @@
-//! `ExitCode` — single source of truth for the FR45 process-exit contract.
+//! `ExitCode` — single source of truth for the CLI's process-exit contract.
 //!
-//! This enum locks the CLI's exit-code surface from v0.1.0. The numeric
-//! discriminants are part of the public contract: scripts that test
-//! `if [ $? -eq 11 ]` after invoking `lcrc` rely on these values being
-//! semver-stable. The 6→10 gap is intentional (FR45) and must not be
-//! renumbered.
-//!
-//! Per AR-28, no module outside `src/main.rs` may call `std::process::exit`,
-//! and no other location in the crate may carry a bare numeric exit code.
+//! The numeric discriminants are part of the public CLI contract: shell
+//! callers test `$?` against these values, so they are semver-stable. The
+//! 6→10 gap is intentional and must not be renumbered to make the set
+//! contiguous.
 
 use std::fmt;
 
-/// Process exit codes for the `lcrc` CLI (FR45).
+/// Process exit codes for the `lcrc` CLI.
 ///
-/// The numeric discriminants are the public contract; do not renumber them
-/// to make the set contiguous. Adding or removing a variant is a breaking
-/// change to the CLI surface.
+/// Adding, removing, or renumbering a variant is a breaking change to the
+/// CLI surface.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ExitCode {
-    /// Success. Wired in every story.
+    /// Success.
     Ok = 0,
-    /// A canary task failed to produce the expected baseline result. Trigger path: Epic 2.
+    /// A canary task failed to produce the expected baseline result.
     CanaryFailed = 1,
-    /// The container sandbox observed a forbidden syscall or network egress. Trigger path: Epic 2.
+    /// The container sandbox observed a forbidden syscall or network egress.
     SandboxViolation = 2,
-    /// Process was interrupted by SIGINT/SIGTERM. Trigger path: Epic 1 (FR27, Story 2.15).
+    /// Process was interrupted by SIGINT/SIGTERM.
     AbortedBySignal = 3,
-    /// `lcrc show` was invoked but the cache contains no rows. Trigger path: Epic 4.
+    /// `lcrc show` was invoked but the cache contains no rows.
     CacheEmpty = 4,
-    /// `lcrc verify` re-measured a sampled cell and observed numerical drift. Trigger path: Epic 5.
+    /// `lcrc verify` re-measured a sampled cell and observed numerical drift.
     DriftDetected = 5,
-    /// User-supplied configuration failed validation. Trigger path: Epic 6.
+    /// User-supplied configuration failed validation.
     ConfigError = 10,
-    /// Pre-flight checks (container runtime, model files, …) refused to proceed. Trigger path: Epic 1 (`FR17a`, Story 1.9).
+    /// Pre-flight checks (container runtime, model files, …) refused to proceed.
     PreflightFailed = 11,
-    /// Another `lcrc scan` is already running against the same cache. Trigger path: Epic 6 (FR52).
+    /// Another `lcrc scan` is already running against the same cache.
     ConcurrentScan = 12,
 }
 
@@ -70,7 +65,7 @@ mod tests {
     use super::ExitCode;
 
     #[test]
-    fn as_i32_matches_fr45_contract() {
+    fn as_i32_matches_contract() {
         assert_eq!(ExitCode::Ok.as_i32(), 0);
         assert_eq!(ExitCode::CanaryFailed.as_i32(), 1);
         assert_eq!(ExitCode::SandboxViolation.as_i32(), 2);
@@ -95,10 +90,8 @@ mod tests {
         assert_eq!(ExitCode::ConcurrentScan.to_string(), "concurrent_scan");
     }
 
-    /// Exhaustive match guards the variant set: adding or removing an
-    /// `ExitCode` without updating this match is a compile error, which
-    /// substitutes for a manual `#[non_exhaustive]` audit on the FR45
-    /// contract.
+    /// Adding or removing an `ExitCode` without updating this match is a
+    /// compile error — substitutes for a manual `#[non_exhaustive]` audit.
     #[test]
     fn variant_set_is_exhaustive() {
         for code in [
