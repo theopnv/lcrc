@@ -12,6 +12,13 @@ milestone to make the deadline enforceable outside BMad context.
 
 ---
 
+## Deferred from: code review of 1-9-container-runtime-preflight-with-socket-precedence-chain (2026-05-07)
+
+- **Double-print of preflight diagnostic to stderr.** `scan::run` prints the `format_no_runtime_reachable` block via `output::diag`, then `main.rs` re-prints with the "error: preflight failed: " prefix. Explicit design decision in spec; Story 1.12 (first full scan wiring) is the revisit point.
+- **`try_exists` returns true for non-socket filesystem entries.** A regular file or directory at a socket path causes `ConnectFailed` instead of the more accurate `SocketFileMissing`. Adding a socket-type check (`FileTypeExt::is_socket()`) would improve the diagnostic for a vanishingly rare edge case. Pre-existing trade-off per spec T3.11.
+- **`try_exists` I/O errors (e.g. permission denied) silently become `SocketFileMissing`.** `unwrap_or(false)` is the spec-chosen behaviour; the user sees "socket file missing" rather than "permission denied". Improving accuracy would require propagating `io::Error` through the `SocketFileMissing` path.
+- **Integration tests lack a Podman socket guard.** `podman_default_socket_path()` is `pub(crate)`, so `tests/sandbox_preflight.rs` cannot call it directly to compute the skip condition. Tests that require all layers to fail may panic on a developer machine running Podman without Docker.
+
 ## Deferred from: code review of 1-8-cache-cell-write-read-api-with-atomic-semantics (2026-05-07)
 
 - **`Option<f64>` perf fields silently round-trip `NaN` / `±Infinity`.** `Cell::{duration_seconds, tokens_per_sec, ttft_seconds, power_watts}` are `Option<f64>`; SQLite's `REAL` accepts non-finite values, but they break `PartialEq` round-trip equality (`NaN != NaN`). The cache primitive trusts its inputs per spec; the perf collector (Story 2.10) is the right validation point, surfacing non-finite as `None` ("graceful degrade") at the producer layer.

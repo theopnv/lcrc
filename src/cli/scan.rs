@@ -1,14 +1,7 @@
 //! Module exists so `lcrc scan --help` works — clap-derive emits the
 //! per-subcommand help from the `Subcommand` enum's `#[command(about = ...)]`.
-//! The `run` body wires preflight; the rest of the scan pipeline lands in a
-//! future story.
 
 /// Entry point for `lcrc scan`.
-///
-/// Runs the container-runtime preflight check. On success, prints a
-/// placeholder message (the full scan pipeline is wired in a future story).
-/// On failure, prints the setup-instructions block to stderr and returns
-/// [`crate::error::Error::Preflight`].
 ///
 /// # Errors
 ///

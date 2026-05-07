@@ -97,8 +97,7 @@ async fn successful_probe_via_docker_host_when_lcrc_unset() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[allow(non_snake_case)]
-async fn precedence_chain_stops_at_first_success_AC4() {
+async fn precedence_chain_stops_at_first_success() {
     let dir = TempDir::new().unwrap();
     let sock1 = dir.path().join("lcrc.sock");
     let sock2 = dir.path().join("docker.sock");
@@ -124,8 +123,7 @@ async fn precedence_chain_stops_at_first_success_AC4() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[allow(non_snake_case)]
-async fn no_runtime_reachable_returns_four_attempts_in_order_AC5() {
+async fn no_runtime_reachable_returns_four_attempts_in_order() {
     let dir = TempDir::new().unwrap();
     let env = MapEnv::with(&[
         (

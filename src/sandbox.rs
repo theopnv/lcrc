@@ -14,9 +14,7 @@ pub mod runtime;
 #[derive(Debug, thiserror::Error)]
 pub enum SandboxError {
     /// Preflight probe of the container runtime socket precedence chain
-    /// failed to reach any compatible runtime. Maps eventually to
-    /// [`crate::exit_code::ExitCode::PreflightFailed`] when surfaced from a
-    /// CLI command (boundary mapping owned by the consumer story).
+    /// failed to reach any compatible runtime.
     #[error("preflight failed: {0}")]
     Preflight(#[from] runtime::PreflightError),
 }

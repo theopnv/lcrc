@@ -91,10 +91,7 @@ pub struct ProbeAttempt {
     pub failure: ProbeFailure,
 }
 
-/// Result of a successful preflight probe. Contains the resolved socket
-/// path and which precedence-chain layer provided it. Future stories
-/// take a `&RuntimeProbe` to construct the `bollard::Docker` client
-/// without re-probing.
+/// Result of a successful preflight probe.
 #[derive(Debug, Clone)]
 pub struct RuntimeProbe {
     /// Absolute socket path that responded successfully to `/_ping`.
@@ -443,6 +440,10 @@ mod tests {
         let env = MapEnv::with(&[]);
         if std::path::Path::new("/var/run/docker.sock").exists() {
             eprintln!("skipping: /var/run/docker.sock exists on this machine");
+            return;
+        }
+        if podman_default_socket_path().exists() {
+            eprintln!("skipping: podman socket exists on this machine");
             return;
         }
         let result = detect(&env).await;

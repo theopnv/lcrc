@@ -1,6 +1,6 @@
 # Story 1.9: Container runtime preflight with socket precedence chain
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -974,6 +974,19 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     ```
     Must produce zero matches — bollard + Unix-socket surface stays inside the sandbox modules and their tests + the cli scan wiring point. Same single-source-of-truth grep contract Stories 1.6 / 1.7 / 1.8 used.
   - [x] T8.6 Verify locally that `RUST_LOG=info cargo run -- scan` (with no runtime available) prints the `INFO lcrc::sandbox::runtime: detected container runtime ...` line (if a runtime IS available) or the setup-instructions block (if not). Eyeball the rendering. AC6 is verified by the in-module + integration tests; this is the manual sanity check.
+
+### Review Findings
+
+- [x] [Review][Patch] Planning meta in `scan.rs` module doc — removed "The `run` body wires preflight; the rest of the scan pipeline lands in a future story." [src/cli/scan.rs:3-4]
+- [x] [Review][Patch] Planning meta in `scan.rs` `run()` function doc — removed "On success, prints a placeholder message (the full scan pipeline is wired in a future story)..." [src/cli/scan.rs:8-11]
+- [x] [Review][Patch] Planning meta in `sandbox.rs` `SandboxError::Preflight` variant doc — removed "boundary mapping owned by the consumer story" [src/sandbox.rs:19-20]
+- [x] [Review][Patch] Planning meta in `runtime.rs` `RuntimeProbe` struct doc — removed "Future stories take a `&RuntimeProbe`..." [src/sandbox/runtime.rs:95-97]
+- [x] [Review][Patch] Test function names contain planning-artifact IDs — renamed `precedence_chain_stops_at_first_success_AC4` → `precedence_chain_stops_at_first_success` and `no_runtime_reachable_returns_four_attempts_in_order_AC5` → `no_runtime_reachable_returns_four_attempts_in_order`; removed `#[allow(non_snake_case)]` [tests/sandbox_preflight.rs:100,127]
+- [x] [Review][Patch] Missing Podman socket guard in `detect_returns_no_runtime_reachable_when_chain_empty` — added `if podman_default_socket_path().exists() { return; }` to prevent false failures on machines with Podman running [src/sandbox/runtime.rs unit tests]
+- [x] [Review][Defer] Double-print of preflight diagnostic to stderr — `scan::run` prints via `output::diag` then `main.rs` re-prints with "error: preflight failed: " prefix. Explicitly accepted design decision in spec (Resolved decisions § "double-print"), Story 1.12 is the revisit point.
+- [x] [Review][Defer] `tokio::fs::try_exists` returns true for non-socket filesystem entries (regular files, directories) giving misleading `ConnectFailed` instead of `SocketFileMissing` — `SocketFileMissing` diagnostic could be made more accurate with a socket-type check, but adds complexity for a vanishingly rare edge case [src/sandbox/runtime.rs:251]
+- [x] [Review][Defer] `tokio::fs::try_exists` I/O errors (e.g. permission denied) are silently mapped to `SocketFileMissing` via `unwrap_or(false)` — spec-chosen trade-off, documented in T3.11 [src/sandbox/runtime.rs:251]
+- [x] [Review][Defer] Integration tests (`sandbox_preflight.rs`) lack a guard for a live Podman socket — `podman_default_socket_path()` is `pub(crate)` so integration tests cannot call it directly; the risk is limited to macOS machines running Podman without Docker [tests/sandbox_preflight.rs]
 
 ## Dev Notes
 
