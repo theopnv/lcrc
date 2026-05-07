@@ -221,7 +221,7 @@ retry_cmd() {
   shift 3
   local attempt=1 rc=0 err_file
   err_file=$(mktemp)
-  trap 'rm -f "$err_file"' RETURN
+  trap "rm -f '$err_file'" RETURN
   while (( attempt <= max )); do
     rc=0
     "$@" 2> >(tee "$err_file" >&2) || rc=$?
@@ -249,7 +249,7 @@ gh_pr_create_with_retry() {
   local max="$GH_RETRY_MAX" delay="$GH_RETRY_INITIAL_DELAY"
   local attempt=1 rc=0 err_file out
   err_file=$(mktemp)
-  trap 'rm -f "$err_file"' RETURN
+  trap "rm -f '$err_file'" RETURN
   while (( attempt <= max )); do
     rc=0
     out=$(gh pr create --base "$base" --head "$branch" --title "$title" --body "$body" 2> "$err_file") || rc=$?
@@ -289,7 +289,7 @@ gh_pr_merge_with_retry() {
   local max="$GH_RETRY_MAX" delay="$GH_RETRY_INITIAL_DELAY"
   local attempt=1 rc=0 err_file
   err_file=$(mktemp)
-  trap 'rm -f "$err_file"' RETURN
+  trap "rm -f '$err_file'" RETURN
   while (( attempt <= max )); do
     rc=0
     gh pr merge "$pr_url" --squash --delete-branch --subject "$pr_title" 2> "$err_file" || rc=$?
