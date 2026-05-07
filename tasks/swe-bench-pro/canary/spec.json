@@ -1,0 +1,12 @@
+{
+  "task_id": "swe-bench-pro:canary",
+  "repo": "princeton-nlp/SWE-bench",
+  "instance_id": "canary-001",
+  "base_commit": "HEAD",
+  "problem_statement": "Write a file named `result.txt` in the current directory containing exactly the text `canary-pass`.",
+  "hints_text": "",
+  "created_at": "2026-01-01T00:00:00Z",
+  "version": "0.0.1",
+  "FAIL_TO_PASS": ["test_canary_result"],
+  "PASS_TO_PASS": []
+}

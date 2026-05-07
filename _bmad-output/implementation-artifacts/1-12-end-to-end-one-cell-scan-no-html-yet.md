@@ -1,6 +1,6 @@
 # Story 1.12: End-to-end one-cell scan (no HTML yet)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,9 +24,9 @@ so that I can verify every layer of the integration spine works end-to-end befor
 
 ## Tasks / Subtasks
 
-- [ ] **T1. Create `tasks/swe-bench-pro/` vendored task directory** (AC: 1, 2)
-  - [ ] T1.1 Create `tasks/swe-bench-pro/version` containing the string `"0.0.1-canary-only"`. This is `task_subset_version` in the cell PK.
-  - [ ] T1.2 Create `tasks/swe-bench-pro/canary/spec.json` with a minimal SWE-bench task spec that mini-swe-agent can execute. Use the format:
+- [x] **T1. Create `tasks/swe-bench-pro/` vendored task directory** (AC: 1, 2)
+  - [x] T1.1 Create `tasks/swe-bench-pro/version` containing the string `"0.0.1-canary-only"`. This is `task_subset_version` in the cell PK.
+  - [x] T1.2 Create `tasks/swe-bench-pro/canary/spec.json` with a minimal SWE-bench task spec that mini-swe-agent can execute. Use the format:
     ```json
     {
       "task_id": "swe-bench-pro:canary",
@@ -42,7 +42,7 @@ so that I can verify every layer of the integration spine works end-to-end befor
     }
     ```
     **Note:** The exact spec format is confirmed when Story 1.14 finalises the mini-swe-agent version and Dockerfile. This spec should be updated in tandem with Story 1.14.
-  - [ ] T1.3 Create `tasks/swe-bench-pro/canary/baseline.json` — the expected outcome for a passing run:
+  - [x] T1.3 Create `tasks/swe-bench-pro/canary/baseline.json` — the expected outcome for a passing run:
     ```json
     {
       "task_id": "swe-bench-pro:canary",
@@ -51,18 +51,18 @@ so that I can verify every layer of the integration spine works end-to-end befor
     }
     ```
 
-- [ ] **T2. Extend `src/scan.rs` — add new submodules** (AC: all)
-  - [ ] T2.1 Add the following module declarations to `src/scan.rs` in alphabetical order (current: `pub mod server_lifecycle;`; add `canary`, `orchestrator`, `signal` before it):
+- [x] **T2. Extend `src/scan.rs` — add new submodules** (AC: all)
+  - [x] T2.1 Add the following module declarations to `src/scan.rs` in alphabetical order (current: `pub mod server_lifecycle;`; add `canary`, `orchestrator`, `signal` before it):
     ```rust
     pub mod canary;
     pub mod orchestrator;
     pub mod server_lifecycle;
     pub mod signal;
     ```
-  - [ ] T2.2 Update the file-level `//!` doc on `src/scan.rs` to list the four submodules.
+  - [x] T2.2 Update the file-level `//!` doc on `src/scan.rs` to list the four submodules.
 
-- [ ] **T3. Implement `src/scan/signal.rs` — SIGINT handler** (AC: 4)
-  - [ ] T3.1 Add file-level doc:
+- [x] **T3. Implement `src/scan/signal.rs` — SIGINT handler** (AC: 4)
+  - [x] T3.1 Add file-level doc:
     ```rust
     //! SIGINT / Ctrl-C detection for the scan lifecycle.
     //!
@@ -70,7 +70,7 @@ so that I can verify every layer of the integration spine works end-to-end befor
     //! `tokio::signal::ctrl_c()` fires. The scan orchestrator races this
     //! against the measurement future via `tokio::select!`.
     ```
-  - [ ] T3.2 Implement:
+  - [x] T3.2 Implement:
     ```rust
     /// Resolves once the process receives SIGINT (Ctrl-C).
     ///
@@ -85,8 +85,8 @@ so that I can verify every layer of the integration spine works end-to-end befor
     ```
     Using `.unwrap_or_default()` converts `Err(io::Error)` (e.g. when signal handler is not supported) to `()`, which is fine — if ctrl_c setup fails, we treat it as if the signal already fired (conservative).
 
-- [ ] **T4. Implement `src/scan/canary.rs` — canary task loader** (AC: 1, 2)
-  - [ ] T4.1 Add file-level doc:
+- [x] **T4. Implement `src/scan/canary.rs` — canary task loader** (AC: 1, 2)
+  - [x] T4.1 Add file-level doc:
     ```rust
     //! Canary task: stable identifier and workspace setup.
     //!
@@ -94,7 +94,7 @@ so that I can verify every layer of the integration spine works end-to-end befor
     //! It uses a vendored spec from `tasks/swe-bench-pro/canary/spec.json`
     //! that mini-swe-agent executes inside the per-task container.
     ```
-  - [ ] T4.2 Define constants:
+  - [x] T4.2 Define constants:
     ```rust
     /// Stable task identifier for the canary cell PK.
     pub const CANARY_TASK_ID: &str = "swe-bench-pro:canary";
@@ -105,7 +105,7 @@ so that I can verify every layer of the integration spine works end-to-end befor
     /// Path to the vendored task-subset version file relative to crate root.
     const TASK_SUBSET_VERSION_PATH: &str = "tasks/swe-bench-pro/version";
     ```
-  - [ ] T4.3 Implement `task_subset_version()`:
+  - [x] T4.3 Implement `task_subset_version()`:
     ```rust
     /// Read the vendored task-subset version string.
     ///
@@ -125,7 +125,7 @@ so that I can verify every layer of the integration spine works end-to-end befor
         }
     }
     ```
-  - [ ] T4.4 Implement `setup_workspace(dir: &Path) -> Result<(), std::io::Error>`:
+  - [x] T4.4 Implement `setup_workspace(dir: &Path) -> Result<(), std::io::Error>`:
     ```rust
     /// Copy the canary spec into a task workspace directory.
     ///
@@ -144,8 +144,8 @@ so that I can verify every layer of the integration spine works end-to-end befor
     ```
     **Note:** `tokio::fs` — not `std::fs` — per async discipline (AR-3).
 
-- [ ] **T5. Implement `src/scan/orchestrator.rs` — one-cell scan pipeline** (AC: 1, 2, 3, 4)
-  - [ ] T5.1 Add file-level doc:
+- [x] **T5. Implement `src/scan/orchestrator.rs` — one-cell scan pipeline** (AC: 1, 2, 3, 4)
+  - [x] T5.1 Add file-level doc:
     ```rust
     //! One-cell scan orchestrator for Epic 1's integration spine.
     //!
@@ -156,7 +156,7 @@ so that I can verify every layer of the integration spine works end-to-end befor
     //! Model path comes from `LCRC_DEV_MODEL_PATH`. Epic 2 replaces the
     //! hardcoded path with real model discovery.
     ```
-  - [ ] T5.2 Implement `detect_backend_build()` private helper:
+  - [x] T5.2 Implement `detect_backend_build()` private helper:
     ```rust
     /// Detect the llama-server version string for `backend_build`.
     ///
@@ -209,7 +209,7 @@ so that I can verify every layer of the integration spine works end-to-end befor
         }
     }
     ```
-  - [ ] T5.3 Implement `run(runtime_probe: crate::sandbox::runtime::RuntimeProbe) -> Result<(), crate::error::Error>`:
+  - [x] T5.3 Implement `run(runtime_probe: crate::sandbox::runtime::RuntimeProbe) -> Result<(), crate::error::Error>`:
     ```rust
     /// Execute the one-cell scan pipeline.
     ///
@@ -353,7 +353,7 @@ so that I can verify every layer of the integration spine works end-to-end befor
         }
     }
     ```
-  - [ ] T5.4 Implement `measure_and_persist(...)` private async helper:
+  - [x] T5.4 Implement `measure_and_persist(...)` private async helper:
     ```rust
     async fn measure_and_persist(
         probe: crate::sandbox::runtime::RuntimeProbe,
@@ -455,8 +455,8 @@ so that I can verify every layer of the integration spine works end-to-end befor
     - `sandbox` was explicitly cleaned up above via `cleanup()` (its `cleanup()` is best-effort;
       the sandbox struct has no Drop impl so this is explicit)
 
-- [ ] **T6. Add `crate::util::rfc3339_now()` helper in `src/util/tracing.rs`** (AC: 2)
-  - [ ] T6.1 `src/util/tracing.rs` currently exists but there is no `src/util/time.rs` yet (architecture specifies it as future). For Story 1.12, add the timestamp helper directly to `src/util/tracing.rs` (same file), since `tracing.rs` is already a catch-all util module in this sprint:
+- [x] **T6. Add `crate::util::rfc3339_now()` helper in `src/util/tracing.rs`** (AC: 2)
+  - [x] T6.1 `src/util/tracing.rs` currently exists but there is no `src/util/time.rs` yet (architecture specifies it as future). For Story 1.12, add the timestamp helper directly to `src/util/tracing.rs` (same file), since `tracing.rs` is already a catch-all util module in this sprint:
     ```rust
     /// Return the current UTC time formatted as RFC 3339 with millisecond precision.
     ///
@@ -477,8 +477,8 @@ so that I can verify every layer of the integration spine works end-to-end befor
     
     Simpler approach: add `pub fn rfc3339_now()` directly to `src/util/tracing.rs`. Then call it as `crate::util::rfc3339_now()` if util re-exports it, or create a new small `src/util.rs` module that re-exports. Check the existing `src/util/` structure and follow whatever pattern is already there.
 
-- [ ] **T7. Update `src/cli/scan.rs` — call orchestrator** (AC: 1, 3, 4, 5)
-  - [ ] T7.1 Replace the existing `run()` body with:
+- [x] **T7. Update `src/cli/scan.rs` — call orchestrator** (AC: 1, 3, 4, 5)
+  - [x] T7.1 Replace the existing `run()` body with:
     ```rust
     /// Entry point for `lcrc scan`.
     ///
@@ -511,10 +511,10 @@ so that I can verify every layer of the integration spine works end-to-end befor
     ```
     **Change `new_current_thread()` → `new_multi_thread()`:** The orchestrator uses `spawn_blocking` (for rusqlite sync calls) which requires a multi-thread runtime. `current_thread` silently deadlocks when `spawn_blocking` futures are awaited.
 
-  - [ ] T7.2 Update the existing unit test `run_returns_preflight_error_when_no_runtime` — it still applies. No changes to the test needed; the test exercises the preflight path which now delegates correctly.
+  - [x] T7.2 Update the existing unit test `run_returns_preflight_error_when_no_runtime` — it still applies. No changes to the test needed; the test exercises the preflight path which now delegates correctly.
 
-- [ ] **T8. Integration test `tests/scan_e2e.rs`** (AC: 1, 2, 3, 4, 5)
-  - [ ] T8.1 Gate on three env vars:
+- [x] **T8. Integration test `tests/scan_e2e.rs`** (AC: 1, 2, 3, 4, 5)
+  - [x] T8.1 Gate on three env vars:
     ```rust
     fn gate() -> Option<std::path::PathBuf> {
         if std::env::var("LCRC_INTEGRATION_TEST_SCAN").is_err() {
@@ -528,21 +528,21 @@ so that I can verify every layer of the integration spine works end-to-end befor
         Some(std::path::PathBuf::from(path))
     }
     ```
-  - [ ] T8.2 Test `scan_cache_miss_then_hit` (AC1, AC2, AC3): call the binary twice. First run → cache miss → cell written. Second run → cache hit → no measurement. Use `assert_cmd` + `predicates` for exit-code assertions.
-  - [ ] T8.3 Test `scan_exit_11_on_no_runtime` (AC5): with no socket reachable, assert binary exits 11. Mirrors the existing `run_returns_preflight_error_when_no_runtime` unit test but at the binary level.
-  - [ ] T8.4 All integration tests carry `#[ignore]` unless `LCRC_INTEGRATION_TEST_SCAN=1` is set (managed by the gate function above + `return` pattern).
-  - [ ] T8.5 Tests use `tempfile::TempDir` for an isolated cache directory, passing it via `LCRC_PATHS_CACHE_DIR` env var (once config is wired — for Epic 1, the test may manually set this or accept the default XDG dir).
+  - [x] T8.2 Test `scan_cache_miss_then_hit` (AC1, AC2, AC3): call the binary twice. First run → cache miss → cell written. Second run → cache hit → no measurement. Use `assert_cmd` + `predicates` for exit-code assertions.
+  - [x] T8.3 Test `scan_exit_11_on_no_runtime` (AC5): with no socket reachable, assert binary exits 11. Mirrors the existing `run_returns_preflight_error_when_no_runtime` unit test but at the binary level.
+  - [x] T8.4 All integration tests carry `#[ignore]` unless `LCRC_INTEGRATION_TEST_SCAN=1` is set (managed by the gate function above + `return` pattern).
+  - [x] T8.5 Tests use `tempfile::TempDir` for an isolated cache directory, passing it via `LCRC_PATHS_CACHE_DIR` env var (once config is wired — for Epic 1, the test may manually set this or accept the default XDG dir).
 
-- [ ] **T9. Local CI mirror** (AC: all)
-  - [ ] T9.1 `cargo build` — all new modules compile; `etcetera`, `time`, `tokio::signal`, `tempfile` all resolve.
-  - [ ] T9.2 `cargo fmt --check` — rustfmt clean.
-  - [ ] T9.3 `cargo clippy --all-targets --all-features -- -D warnings`. Watch for:
+- [x] **T9. Local CI mirror** (AC: all)
+  - [x] T9.1 `cargo build` — all new modules compile; `etcetera`, `time`, `tokio::signal`, `tempfile` all resolve.
+  - [x] T9.2 `cargo fmt --check` — rustfmt clean.
+  - [x] T9.3 `cargo clippy --all-targets --all-features -- -D warnings`. Watch for:
     - `missing_docs` on every `pub` item in new modules.
     - `clippy::module_name_repetitions` on any error types in `scan/`.
     - `clippy::used_underscore_binding` on `_` prefixed variables kept around for drop ordering.
     - `clippy::cast_possible_truncation` — no casts needed here; note if any appear.
-  - [ ] T9.4 `cargo test` — all pre-existing tests pass. New integration tests skip unless `LCRC_INTEGRATION_TEST_SCAN=1`.
-  - [ ] T9.5 Scope check — no module outside `src/scan/server_lifecycle.rs` spawns `llama-server`:
+  - [x] T9.4 `cargo test` — all pre-existing tests pass. New integration tests skip unless `LCRC_INTEGRATION_TEST_SCAN=1`.
+  - [x] T9.5 Scope check — no module outside `src/scan/server_lifecycle.rs` spawns `llama-server`:
     ```bash
     git grep -nE 'Command::new\("llama' src/ tests/ \
       | grep -v '^src/scan/server_lifecycle.rs:' \
@@ -745,10 +745,38 @@ Recent commits show:
 
 ### Agent Model Used
 
-_to be filled by dev agent_
+claude-sonnet-4-6[1m]
 
 ### Debug Log References
 
+- `Cache` does not implement `Clone` (single-owner by design per its doc). Used fresh `Cache::open` connections per `spawn_blocking` call (lookup and write each open their own connection). WAL mode makes this safe for concurrent readers.
+- `etcetera::base_strategy::choose_base_strategy().data_dir()` requires `use etcetera::BaseStrategy as _` trait import to bring `data_dir()` into scope.
+- `run()` in orchestrator exceeded the 100-line clippy limit; suppressed with `#[allow(clippy::too_many_lines)]` per architecture constraint that no new abstraction layers be added in this story.
+- `parse_backend_build` used `text[i+1..]` where `i` was an offset into `first_line`; corrected to `first_line[i+1..]` for correctness.
+- Two clippy `doc_markdown` lints (`model_sha`, `ctrl_c`) fixed by wrapping in backticks.
+- `.map(str::to_owned).unwrap_or_else(...)` → `.map_or_else(...)` per `clippy::map_unwrap_or`.
+
 ### Completion Notes List
 
+- Implemented the full one-cell scan pipeline: preflight → fingerprint → backend detect → model SHA → cell key → cache lookup → (on miss) server start → sandbox → workspace → run_task → cell write → teardown.
+- SIGINT handling via `tokio::select!` with `wait_for_sigint()` — aborts without writing cell (AC4).
+- Cache hit short-circuits before server start (AC3 idempotency / FR26).
+- `rfc3339_now()` added to `src/util/tracing.rs` and re-exported from `src/util.rs`.
+- Multi-thread tokio runtime in `cli/scan.rs` (was `current_thread`) — required for `spawn_blocking`.
+- All 140 pre-existing tests continue to pass. New tests in `scan/canary.rs`, `scan/orchestrator.rs`, and `tests/scan_e2e.rs` added.
+- `tests/scan_e2e.rs` full E2E tests gate on `LCRC_INTEGRATION_TEST_SCAN=1` + `LCRC_DEV_MODEL_PATH`; skip gracefully when unset.
+- Container image placeholder (`sha256:000...`) means `run_task` will fail with `ImagePull` until Story 1.14 publishes the real image — by design.
+
 ### File List
+
+- `tasks/swe-bench-pro/version` (NEW)
+- `tasks/swe-bench-pro/canary/spec.json` (NEW)
+- `tasks/swe-bench-pro/canary/baseline.json` (NEW)
+- `src/scan.rs` (MODIFIED — added three pub mod declarations; updated file-level doc)
+- `src/scan/signal.rs` (NEW)
+- `src/scan/canary.rs` (NEW)
+- `src/scan/orchestrator.rs` (NEW)
+- `src/util/tracing.rs` (MODIFIED — added `rfc3339_now()`)
+- `src/util.rs` (MODIFIED — added `pub use tracing::rfc3339_now`)
+- `src/cli/scan.rs` (MODIFIED — replaced stub with orchestrator call; `current_thread` → `multi_thread`)
+- `tests/scan_e2e.rs` (NEW)

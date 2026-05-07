@@ -1,0 +1,5 @@
+{
+  "task_id": "swe-bench-pro:canary",
+  "expected_pass": true,
+  "description": "Canary task always passes on a correctly installed mini-swe-agent"
+}

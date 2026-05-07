@@ -44,6 +44,18 @@ pub fn init() -> Result<(), TryInitError> {
         .try_init()
 }
 
+/// Return the current UTC time formatted as RFC 3339 with millisecond precision.
+///
+/// Format example: `"2026-04-30T14:23:15.412Z"` — the `Z` suffix is literal.
+#[must_use]
+pub fn rfc3339_now() -> String {
+    use time::OffsetDateTime;
+    use time::format_description::well_known::Rfc3339;
+    OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_owned())
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
