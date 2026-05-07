@@ -7,10 +7,12 @@
 ///
 /// Returns [`crate::error::Error::Preflight`] when the container-runtime
 /// preflight detects no reachable Docker-Engine-API-compatible socket,
-/// when the sandbox cannot install structural iptables port-pin rules,
-/// or when the async runtime fails to initialize.
+/// when `LCRC_DEV_MODEL_PATH` is unset, or when sandbox setup fails.
+/// Returns [`crate::error::Error::AbortedBySignal`] on Ctrl-C.
 pub fn run() -> Result<(), crate::error::Error> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
+    // multi_thread required: spawn_blocking (for rusqlite sync calls)
+    // deadlocks silently under current_thread.
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .map_err(|e| crate::error::Error::Preflight(format!("tokio runtime init: {e}")))?;
@@ -23,14 +25,7 @@ pub fn run() -> Result<(), crate::error::Error> {
                     source = probe.source.name(),
                     "detected container runtime",
                 );
-
-                let sandbox = crate::sandbox::Sandbox::new(&probe, 11434)
-                    .await
-                    .map_err(|e| crate::error::Error::Preflight(format!("{e}")))?;
-                sandbox.cleanup().await;
-
-                crate::output::diag("`lcrc scan` is not yet implemented in this build.");
-                Ok(())
+                crate::scan::orchestrator::run(probe).await
             }
             Err(err) => Err(crate::error::Error::Preflight(err.to_string())),
         }
