@@ -59,9 +59,8 @@ async fn sandbox_workspace_mount_visible_inside_container() {
 
     sandbox.cleanup().await;
 
-    // The image doesn't exist yet (placeholder digest). The test skeleton is
-    // present so Story 1.14 can enable it by replacing the placeholder.
-    // For now we verify the API contract compiles and runs the guard.
+    // The placeholder digest causes pull to fail. The test verifies the API
+    // contract compiles; a real image enables the full assertion path.
     match outcome {
         Err(lcrc::sandbox::SandboxError::ImagePull(_)) => {
             eprintln!("expected: image pull fails because digest is a placeholder");
@@ -152,12 +151,11 @@ async fn sandbox_exits_11_on_unsupported_runtime() {
     );
 }
 
-/// Placeholder test — Story 1.14 removes `#[ignore]` and fills the real digest.
-#[ignore = "real GHCR image does not exist until Story 1.14"]
+#[ignore = "real GHCR image does not exist yet; fill CONTAINER_IMAGE_DIGEST and remove this attribute when available"]
 #[tokio::test(flavor = "current_thread")]
 async fn sandbox_image_pull_and_digest_verification() {
-    // Story 1.14: replace CONTAINER_IMAGE_DIGEST placeholder with the real
-    // digest and remove the `#[ignore]` attribute above.
+    // Replace CONTAINER_IMAGE_DIGEST placeholder with the real digest and
+    // remove the `#[ignore]` attribute above when the image is published.
     let Some(probe) = runtime_probe().await else {
         eprintln!("skipping: no container runtime reachable");
         return;

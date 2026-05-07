@@ -58,14 +58,18 @@ fn parse_image_ref(image_ref: &str) -> Result<(String, String), SandboxError> {
     }
 }
 
-/// Check that the `RepoDigests` list contains an entry ending with the expected digest.
+/// Check that the `RepoDigests` list contains an entry whose digest component
+/// exactly matches `expected_digest` (the portion after `@`).
 fn verify_digest(
     inspect: &bollard::models::ImageInspect,
     expected_digest: &str,
     image_ref: &str,
 ) -> Result<(), SandboxError> {
     let digests = inspect.repo_digests.as_deref().unwrap_or(&[]);
-    let matches = digests.iter().any(|d| d.contains(expected_digest));
+    let matches = digests.iter().any(|d| {
+        d.split_once('@')
+            .is_some_and(|(_, hash)| hash == expected_digest)
+    });
     if matches {
         Ok(())
     } else {

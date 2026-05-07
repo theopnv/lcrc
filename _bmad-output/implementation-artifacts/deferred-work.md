@@ -12,6 +12,14 @@ milestone to make the deadline enforceable outside BMad context.
 
 ---
 
+## Deferred from: code review of 1-10-sandbox-run-task-with-workspace-mount-custom-default-deny-network (2026-05-07)
+
+- **nft `ip filter FORWARD` chain existence not checked before rule installation.** `install_port_pin_rules` runs `nft add rule ip filter FORWARD ...` without first verifying the table/chain exists. On a fresh or non-standard Podman VM, the command may fail with a generic `nft rule install failed` error; error surfaces as `UnsupportedRuntime` either way. Proper fix would add an existence check and potentially create the chain, but requires knowing the full nft schema of the target VM.
+- **ACCEPT rule left in nftables if DROP rule install fails.** If the ACCEPT rule installs successfully but the DROP rule then fails, `create_scan_network` returns `UnsupportedRuntime` while the ACCEPT rule persists in nftables. Subsequent runs will accumulate stale ACCEPT rules. Correct fix requires cleanup of the ACCEPT rule on DROP failure.
+- **`ensure_image` falls through to pull on any `inspect_image` error, not just 404.** If the daemon is unavailable or returns a permission error, the code tries to pull instead of surfacing the real error. Correct fix requires matching on `bollard::errors::Error::DockerResponseServerError { status_code: 404, .. }` (or similar) — bollard error variant needs verification in the installed version.
+- **`pull_image` does not pass digest to `create_image`.** The image is fetched by tag only; a re-tagged image could be pulled. Post-pull `verify_digest` catches mismatches, so correctness is preserved, but the defense-in-depth of pulling by digest is missing.
+- **No container log capture before force-remove on failure.** When `run_container` fails or exits non-zero, `force_remove_container` is called immediately with no attempt to retrieve container logs via `docker.logs(...)`. All diagnostic output is permanently lost. Enhancement deferred to a future story that wires the full scan observability pipeline.
+
 ## Deferred from: code review of 1-9-container-runtime-preflight-with-socket-precedence-chain (2026-05-07)
 
 - **Double-print of preflight diagnostic to stderr.** `scan::run` prints the `format_no_runtime_reachable` block via `output::diag`, then `main.rs` re-prints with the "error: preflight failed: " prefix. Explicit design decision in spec; Story 1.12 (first full scan wiring) is the revisit point.

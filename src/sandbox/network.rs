@@ -55,8 +55,7 @@ fn parse_running_machine(output: &str) -> Option<String> {
             return Some(name.to_string());
         }
     }
-    // Fall back to the default machine name when list parsing yields nothing.
-    Some("podman-machine-default".to_string())
+    None
 }
 
 /// Create the per-scan internal Docker network and install port-pin rules.
@@ -96,6 +95,12 @@ pub async fn create_scan_network(
         .map_err(|e| SandboxError::NetworkSetup(format!("create_network: {e}")))?;
 
     install_port_pin_rules(docker, &network_name, llama_port).await?;
+
+    tracing::warn!(
+        target: "lcrc::sandbox::network",
+        network = %network_name,
+        "nft port-pin rule probe skipped: container image is a placeholder and cannot be pulled",
+    );
 
     Ok(network_name)
 }
@@ -273,11 +278,7 @@ mod tests {
     #[test]
     fn parse_running_machine_skips_stopped_entries() {
         let output = "my-machine,false\nother-machine,false\n";
-        // Falls back to default name when none are running.
-        assert_eq!(
-            parse_running_machine(output).as_deref(),
-            Some("podman-machine-default")
-        );
+        assert_eq!(parse_running_machine(output), None);
     }
 
     #[test]
@@ -287,11 +288,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_running_machine_empty_output_returns_default() {
+    fn parse_running_machine_empty_output_returns_none() {
         let output = "";
-        assert_eq!(
-            parse_running_machine(output).as_deref(),
-            Some("podman-machine-default")
-        );
+        assert_eq!(parse_running_machine(output), None);
     }
 }

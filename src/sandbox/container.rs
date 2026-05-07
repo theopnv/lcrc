@@ -30,6 +30,13 @@ pub async fn run_container(
     network_name: &str,
     scan_id: &str,
 ) -> Result<TaskOutcome, SandboxError> {
+    if !workspace_path.is_absolute() {
+        return Err(SandboxError::ContainerCreate(format!(
+            "workspace_path must be absolute, got: {}",
+            workspace_path.display()
+        )));
+    }
+
     let container_name = unique_container_name(scan_id);
 
     let bind = format!("{}:/workspace:rw", workspace_path.display());
@@ -81,6 +88,14 @@ pub async fn run_container(
     force_remove_container(docker, &container_name).await;
 
     let responses = wait_result.map_err(|e| SandboxError::ContainerCreate(format!("wait: {e}")))?;
+
+    if responses.is_empty() {
+        tracing::warn!(
+            target: "lcrc::sandbox::container",
+            container = container_name,
+            "wait_container returned empty response; treating as non-zero exit",
+        );
+    }
 
     let pass = responses.first().is_some_and(|r| r.status_code == 0);
 

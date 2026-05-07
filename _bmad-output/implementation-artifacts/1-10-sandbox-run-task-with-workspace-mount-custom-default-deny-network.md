@@ -1,6 +1,6 @@
 # Story 1.10: `Sandbox::run_task` with workspace mount + custom default-deny network
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -568,3 +568,38 @@ claude-sonnet-4-6[1m]
 - `src/cli/scan.rs` — extended preflight with `Sandbox::new` capability check and cleanup
 - `tests/sandbox_run_task.rs` — NEW: five integration tests gated on `LCRC_INTEGRATION_TEST_SANDBOX=1`
 - `tests/cli_exit_codes.rs` — added `scan_exits_11_on_unsupported_runtime_for_network_isolation` test
+
+### Review Findings
+
+**Reviewed on 2026-05-07 by bmad-code-review (3-layer: Blind Hunter + Edge Case Hunter + Acceptance Auditor)**
+
+Applied inline (must-fix):
+- [x] [Review][Patch] Story references in module-level doc comments violate CLAUDE.md HIGH-PRECEDENCE RULES — removed "(Story 1.9)", "(this story)" from `sandbox.rs` module doc; removed story ref from `constants.rs` doc comment; cleaned story refs from `tests/sandbox_run_task.rs` comments [`src/sandbox.rs:1-7`, `src/constants.rs:8`, `tests/sandbox_run_task.rs`]
+- [x] [Review][Patch] `parse_running_machine` returns `Some("podman-machine-default")` when no machine is running — causes `podman machine exec` against a non-existent machine with a cryptic error instead of a clean `UnsupportedRuntime`; changed loop fallback from `Some(default)` to `None`; updated two affected unit tests [`src/sandbox/network.rs:57-59`]
+
+Applied inline (should-fix):
+- [x] [Review][Patch] `verify_digest` uses substring `contains` instead of exact component equality — split each `RepoDigests` entry at `@` and compare the hash portion exactly, eliminating false-positive matches on short/prefix digests [`src/sandbox/image.rs:68-72`]
+- [x] [Review][Patch] `workspace_path` not validated as absolute before formatting bind string — relative paths silently produce a bind against the daemon's CWD; added `is_absolute()` guard at the top of `run_container` [`src/sandbox/container.rs:33-38`]
+- [x] [Review][Patch] Missing `tracing::warn!` for skipped negative probe — T5.5 requires logging when the iptables-rule probe is skipped due to placeholder image; added warn at end of `create_scan_network` [`src/sandbox/network.rs:101-106`]
+- [x] [Review][Patch] `wait_container` empty response silently reports `pass = false` — added `tracing::warn!` log when `responses` is empty so the anomaly is observable [`src/sandbox/container.rs:85-92`]
+
+Deferred:
+- [x] [Review][Defer] nft `ip filter FORWARD` chain existence not checked before rule insertion [`src/sandbox/network.rs:143-204`] — deferred, non-standard Podman VM setups only; nft error surfaces as `UnsupportedRuntime` anyway
+- [x] [Review][Defer] ACCEPT rule left in nftables if DROP rule install fails — partial firewall armed state [`src/sandbox/network.rs:196-204`] — deferred, nftables lifecycle cleanup is out of scope for this story
+- [x] [Review][Defer] `ensure_image` falls through to pull on any `inspect_image` error, not just 404 [`src/sandbox/image.rs:25`] — deferred, bollard 404 error variant needs verification; two-step pull+verify catches tampered images regardless
+- [x] [Review][Defer] `pull_image` does not pass digest to `create_image`, relying on post-pull verify [`src/sandbox/image.rs:83-99`] — deferred, two-step approach is per spec T4.2; `verify_digest` catches mismatches
+- [x] [Review][Defer] No container log capture before force-remove on failure [`src/sandbox/container.rs:81`] — deferred, enhancement not in scope
+
+Dismissed (12 findings):
+- nft DROP rule blocks DNS — intended per AC4 (no DNS resolver by design)
+- Podman-only `UnsupportedRuntime` — correct per AC8/NFR-S3
+- `container_subnet`/`host_ip` shell injection — `Command::args` + `podman machine exec` don't invoke a shell; each arg is a separate token
+- `unique_container_name` clock collision — spec-mandated pid+nanos approach; astronomically unlikely in practice
+- `force_remove_container` on running container — intended force-remove on all exit paths
+- CONTAINER_IMAGE_DIGEST placeholder confusing error — intentional; placeholder until image is published
+- `scan_id` collision — spec-mandated pid+millis; acceptable
+- `cleanup` not consuming — API design decision for future stories
+- `llama_port` `#[allow(dead_code)]` — spec-mandated field, used at construction time only
+- Integration tests T9.2–T9.5 hollow — intentionally limited by placeholder image
+- AC8 wiring correctness — verified correct in `cli/scan.rs` diff
+- `discover_host_ip` `192.168.65.2` fallback — standard Podman-on-macOS default; logged via the existing info path

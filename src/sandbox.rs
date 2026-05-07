@@ -1,10 +1,10 @@
 //! Per-task isolation envelope.
 //!
 //! The `sandbox` module owns the per-task isolation envelope. Submodules:
-//! - `runtime` — preflight detection of a reachable Docker-Engine-API-compatible socket (Story 1.9)
-//! - `image` — container image pull and digest verification (this story)
-//! - `network` — per-scan internal Docker network with iptables port-pinning (this story)
-//! - `container` — ephemeral container lifecycle; the ONLY caller of bollard container APIs (this story)
+//! - `runtime` — preflight detection of a reachable Docker-Engine-API-compatible socket
+//! - `image` — container image pull and digest verification
+//! - `network` — per-scan internal Docker network with iptables port-pinning
+//! - `container` — ephemeral container lifecycle; the ONLY caller of bollard container APIs
 
 pub mod container;
 pub mod image;
