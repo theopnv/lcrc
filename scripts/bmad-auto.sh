@@ -281,40 +281,43 @@ gh_pr_create_with_retry() {
   return $rc
 }
 
-# gh pr merge with retry + idempotency check. The merge mutation may have
-# completed server-side even when the client saw a 5xx; check `state` before
-# re-attempting and clean up the branch separately if needed.
+# gh pr merge with retry + idempotency check. Uses --auto so GitHub queues
+# the squash-merge for when all branch-protection requirements are satisfied,
+# avoiding the "base branch policy prohibits the merge" race that occurs when
+# the merge API is called the instant checks turn green. Phase 2 polls until
+# the PR state transitions to MERGED (or times out after ~30 min).
 gh_pr_merge_with_retry() {
   local pr_url="$1" pr_title="$2"
   local max="$GH_RETRY_MAX" delay="$GH_RETRY_INITIAL_DELAY"
   local attempt=1 rc=0 err_file
   err_file=$(mktemp)
   trap "rm -f '$err_file'" RETURN
+
+  # Phase 1: enable auto-merge (with retry on transient failures).
   while (( attempt <= max )); do
     rc=0
-    gh pr merge "$pr_url" --squash --delete-branch --subject "$pr_title" 2> "$err_file" || rc=$?
+    gh pr merge "$pr_url" --auto --squash --delete-branch --subject "$pr_title" 2> "$err_file" || rc=$?
     cat "$err_file" >&2
     if (( rc == 0 )); then
-      return 0
+      break
     fi
-    # Idempotency: state may already be MERGED.
+    # Idempotency: already MERGED, or auto-merge already queued.
     local state
     state=$(gh pr view "$pr_url" --json state -q .state 2>/dev/null || echo "")
     if [[ "$state" == "MERGED" ]]; then
-      log "  pr merge: server-side success despite client error (state=MERGED)"
-      local head_ref
-      head_ref=$(gh pr view "$pr_url" --json headRefName -q .headRefName 2>/dev/null || echo "")
-      if [[ -n "$head_ref" ]]; then
-        gh api -X DELETE "repos/{owner}/{repo}/git/refs/heads/$head_ref" 2>/dev/null \
-          && log "  pr merge: deleted stale branch $head_ref" \
-          || log "  pr merge: branch $head_ref already gone (or could not be deleted)"
-      fi
+      log "  pr merge: already merged"
       return 0
+    fi
+    local auto_merge
+    auto_merge=$(gh pr view "$pr_url" --json autoMergeRequest -q '.autoMergeRequest // ""' 2>/dev/null || echo "")
+    if [[ -n "$auto_merge" ]]; then
+      log "  pr merge: auto-merge already queued; proceeding to poll"
+      break
     fi
     local detail
     detail=$(extract_gh_error "$err_file")
     if (( attempt == max )) || ! is_transient_failure "$err_file"; then
-      err "pr merge: failed (rc=$rc, attempt $attempt/$max). ${detail:+Detail: $detail}"
+      err "pr merge: failed to enable auto-merge (rc=$rc, attempt $attempt/$max). ${detail:+Detail: $detail}"
       return $rc
     fi
     warn "pr merge: transient failure (rc=$rc, attempt $attempt/$max). ${detail:+Detail: $detail} Retrying in ${delay}s…"
@@ -322,7 +325,23 @@ gh_pr_merge_with_retry() {
     delay=$(( delay * 2 ))
     attempt=$(( attempt + 1 ))
   done
-  return $rc
+
+  # Phase 2: poll until GitHub executes the auto-merge (~30 min timeout).
+  log "  Auto-merge enabled; polling for MERGED state…"
+  local poll_max=$(( 30 * 60 / CI_WATCH_INTERVAL ))
+  local poll_attempt=0
+  while (( poll_attempt < poll_max )); do
+    local state
+    state=$(gh pr view "$pr_url" --json state -q .state 2>/dev/null || echo "")
+    case "$state" in
+      MERGED) log "  pr merge: merged successfully"; return 0 ;;
+      CLOSED) err "pr merge: PR was closed without merging (${pr_url})"; return 1 ;;
+    esac
+    sleep "$CI_WATCH_INTERVAL"
+    poll_attempt=$(( poll_attempt + 1 ))
+  done
+  err "pr merge: timed out waiting for auto-merge to complete (${pr_url})"
+  return 1
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -557,7 +576,7 @@ Unattended run — do not ask for confirmation."
 
   # 6. PR open, CI watch, merge.
   if $DRY_RUN; then
-    log "  [dry-run] would: gh pr create (with idempotency retry), watch CI (with heal), gh pr merge --squash --delete-branch (with idempotency retry)"
+    log "  [dry-run] would: gh pr create (with idempotency retry), watch CI (with heal), gh pr merge --auto --squash --delete-branch (with idempotency retry + MERGED poll)"
     return 0
   fi
 
