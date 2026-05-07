@@ -38,7 +38,7 @@ DRY_RUN=false
 ONCE=false
 SKIP_REVIEW=false
 SKIP_RETRO=false
-NO_PAUSE=false
+PAUSE_BEFORE_PUSH=false
 
 # ─────────────────────────────────────────────────────────────
 # Args
@@ -48,12 +48,12 @@ usage() {
   cat <<'EOF'
 
 Flags:
-  --dry-run        Print actions, do not invoke claude/git/gh.
-  --once           Process at most one story, then stop.
-  --skip-review    Skip the bmad-code-review step.
-  --skip-retro     Skip the retrospective at epic boundary.
-  --no-pause       Do not pause for operator review after each story.
-  -h, --help       Show this message.
+  --dry-run             Print actions, do not invoke claude/git/gh.
+  --once                Process at most one story, then stop.
+  --skip-review         Skip the bmad-code-review step.
+  --skip-retro          Skip the retrospective at epic boundary.
+  --pause-before-push   Pause for operator review (friction report) before pushing each story.
+  -h, --help            Show this message.
 
 Env overrides: BMAD_SPRINT_FILE, BMAD_STORIES_DIR, BMAD_MAIN_BRANCH,
   BMAD_MAX_HEAL_ATTEMPTS, BMAD_CLAUDE_PERMISSION_MODE, BMAD_CLAUDE_MODEL,
@@ -68,8 +68,8 @@ while [[ $# -gt 0 ]]; do
     --dry-run)     DRY_RUN=true; shift ;;
     --once)        ONCE=true; shift ;;
     --skip-review) SKIP_REVIEW=true; shift ;;
-    --skip-retro)  SKIP_RETRO=true; shift ;;
-    --no-pause)    NO_PAUSE=true; shift ;;
+    --skip-retro)         SKIP_RETRO=true; shift ;;
+    --pause-before-push)  PAUSE_BEFORE_PUSH=true; shift ;;
     -h|--help)     usage; exit 0 ;;
     *)             echo "unknown arg: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -405,10 +405,11 @@ Constraints:
 # ─────────────────────────────────────────────────────────────
 # Friction report + operator pause
 #
-# After each story's main work is pushed, scan the run logs for things that
-# deserve operator attention (blocked Claude permissions, conflicting review
-# fixes, etc.) and pause the script so the operator can act on them before
-# the next story spins up.
+# After each story's commits are ready but before the branch is pushed, scan
+# the run logs for things that deserve operator attention (blocked Claude
+# permissions, conflicting review fixes, etc.). The pause is opt-in
+# (--pause-before-push); without the flag the report is still written to
+# LOG_DIR but the script continues unattended.
 # ─────────────────────────────────────────────────────────────
 generate_friction_report() {
   local story_key="$1" branch="$2" report_path="$3"
@@ -470,12 +471,12 @@ Be terse. Operator will scan in 30 seconds. Do NOT speculate; only report what i
 
 pause_for_operator() {
   local report_path="$1" story_key="$2"
-  if $NO_PAUSE; then
-    log "  --no-pause: skipping operator pause for $story_key (report at $report_path)"
+  if ! $PAUSE_BEFORE_PUSH; then
+    log "  --pause-before-push not set: skipping operator pause for $story_key (report at $report_path)"
     return 0
   fi
   if $DRY_RUN; then
-    log "  [dry-run] would pause for operator after $story_key"
+    log "  [dry-run] would pause for operator before push for $story_key"
     return 0
   fi
 
@@ -489,11 +490,11 @@ pause_for_operator() {
     sed 's/^/   /' "$report_path" >&2
     printf ' --- End report ---\n\n' >&2
   fi
-  printf ' Press \033[1;32mEnter\033[0m to continue (next: open PR + watch CI + merge), or \033[1;31mCtrl-C\033[0m to abort.\n' >&2
+  printf ' Press \033[1;32mEnter\033[0m to continue (next: push + open PR + watch CI + merge), or \033[1;31mCtrl-C\033[0m to abort.\n' >&2
   if [[ -t 0 ]]; then
     read -r _
   else
-    warn "  stdin is not a TTY; cannot pause interactively. Set --no-pause to acknowledge this is intentional."
+    warn "  stdin is not a TTY; cannot pause interactively. Run without --pause-before-push for non-interactive use."
     die "no TTY for operator pause; aborting"
   fi
   log "Operator acknowledged; continuing."
@@ -557,7 +558,14 @@ Unattended run — do not ask for confirmation."
     commit_all_if_changes "review(${story_key}): address review feedback"
   fi
 
-  # 4. Push.
+  # 4. Friction report + optional operator pause (--pause-before-push).
+  # Runs before push so the operator can amend commits if needed.
+  # Dry-run path inside each helper.
+  local report_path="$LOG_DIR/friction-${story_key}.md"
+  generate_friction_report "$story_key" "$branch" "$report_path"
+  pause_for_operator "$report_path" "$story_key"
+
+  # 5. Push.
   if $DRY_RUN; then
     log "  [dry-run] would: git push -u origin $branch (with retry on transient failures)"
   else
@@ -565,14 +573,6 @@ Unattended run — do not ask for confirmation."
     retry_cmd "$GH_RETRY_MAX" "$GH_RETRY_INITIAL_DELAY" "git push" \
       git push -u origin "$branch"
   fi
-
-  # 5. Friction report + operator pause. Generated after push so the
-  # operator can address surfaced issues (blocked permissions, conflicting
-  # reviews, spec ambiguity) before more automation runs against this
-  # story or the next one. Dry-run path inside each helper.
-  local report_path="$LOG_DIR/friction-${story_key}.md"
-  generate_friction_report "$story_key" "$branch" "$report_path"
-  pause_for_operator "$report_path" "$story_key"
 
   # 6. PR open, CI watch, merge.
   if $DRY_RUN; then
