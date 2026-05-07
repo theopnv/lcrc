@@ -1,7 +1,6 @@
 //! Canary task: stable identifier and workspace setup.
 //!
-//! The canary task is the single task run in Epic 1's integration spine.
-//! It uses a vendored spec from `tasks/swe-bench-pro/canary/spec.json`
+//! Uses a vendored spec from `tasks/swe-bench-pro/canary/spec.json`
 //! that mini-swe-agent executes inside the per-task container.
 
 /// Stable task identifier for the canary cell PK.

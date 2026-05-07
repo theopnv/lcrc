@@ -12,6 +12,12 @@ milestone to make the deadline enforceable outside BMad context.
 
 ---
 
+## Deferred from: code review of 1-12-end-to-end-one-cell-scan-no-html-yet (2026-05-07)
+
+- **Port TOCTOU in `allocate_free_port` (pre-existing in `server_lifecycle.rs`).** `allocate_free_port` binds to port 0, records the assigned port, drops the listener, then passes the port number to `llama-server --port`. Another process can claim the port in that window, causing a non-deterministic `ServerError::StartupFailure`. Fixing requires either a retry loop in `start()` or a platform-specific SO_REUSEPORT + fd-passing approach neither of which `llama-server`'s CLI supports today.
+- **AC4 (Ctrl-C → exit 3) has no integration test coverage.** `tests/scan_e2e.rs` covers AC1/AC2/AC3 and AC5; sending SIGINT to a running `cargo`-spawned binary mid-test is not in T8's explicit scope. Revisit when the scan observability pipeline (Story 2.13) is in place and reliable timing can be assumed.
+- **AC2 cell metadata columns not verified by integration test.** `scan_cache_miss_then_hit` asserts only exit code 0 and `lcrc.db` existence. Verifying `depth_tier`, `scan_timestamp`, `container_image_id`, and `lcrc_version` via an embedded SQLite query would close the AC2 gap; deferred until the integration environment is stable (pending Story 1.14 container image).
+
 ## Deferred from: code review of 1-11-llama-server-lifecycle (2026-05-07)
 
 - **TOCTOU race between `allocate_free_port` listener drop and llama-server bind.** `allocate_free_port` binds to port 0, records the port, then drops the listener before llama-server binds. Another process (or concurrent call) can claim that port in the window. Acknowledged in dev notes as an accepted trade-off; fixing it would require passing the bound fd to llama-server (not supported by its CLI) or a retry loop in `start()`.

@@ -1,6 +1,6 @@
 # Story 1.12: End-to-end one-cell scan (no HTML yet)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -780,3 +780,13 @@ claude-sonnet-4-6[1m]
 - `src/util.rs` (MODIFIED — added `pub use tracing::rfc3339_now`)
 - `src/cli/scan.rs` (MODIFIED — replaced stub with orchestrator call; `current_thread` → `multi_thread`)
 - `tests/scan_e2e.rs` (NEW)
+
+### Review Findings
+
+- [x] [Review][Patch] Planning artifact refs in source comments and user-visible error string [`src/scan/orchestrator.rs`, `src/scan/canary.rs`] — fixed inline
+- [x] [Review][Patch] `sandbox.cleanup()` not called on `run_task` error — network/container resource leak [`src/scan/orchestrator.rs:199`] — fixed inline
+- [x] [Review][Patch] `CacheError::DuplicateCell` swallowed by generic message; no loud distinctive error [`src/scan/orchestrator.rs:232`] — fixed inline
+- [x] [Review][Patch] `detect_backend_build` silently returns sentinel on exec failure with no log — poisoned cache key gives no diagnostic [`src/scan/orchestrator.rs:268`] — fixed inline
+- [x] [Review][Defer] Port TOCTOU in `allocate_free_port` (bind→drop→pass) [`src/scan/server_lifecycle.rs`] — deferred, pre-existing
+- [x] [Review][Defer] AC4 (SIGINT integration test) has no test coverage in `tests/scan_e2e.rs` — deferred, not in T8 scope
+- [x] [Review][Defer] AC2 cell metadata columns not verified by integration test — deferred, T8 spec only requires exit-code assertions

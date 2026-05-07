@@ -1,4 +1,4 @@
-//! One-cell scan orchestrator for Epic 1's integration spine.
+//! One-cell scan orchestrator.
 //!
 //! `run()` executes the full pipeline for a single hardcoded canary
 //! measurement: preflight → fingerprint → `model_sha` → cache miss → server
@@ -21,7 +21,7 @@ pub async fn run(probe: crate::sandbox::runtime::RuntimeProbe) -> Result<(), cra
     // --- Step 1: Model path ---
     let model_path_str = std::env::var("LCRC_DEV_MODEL_PATH").map_err(|_| {
         crate::error::Error::Preflight(
-            "LCRC_DEV_MODEL_PATH not set; set it to a GGUF file path for Epic 1 scans".into(),
+            "LCRC_DEV_MODEL_PATH not set; set it to a GGUF file path".into(),
         )
     })?;
     let model_path = std::path::PathBuf::from(&model_path_str);
@@ -106,7 +106,7 @@ pub async fn run(probe: crate::sandbox::runtime::RuntimeProbe) -> Result<(), cra
             .map_err(|e| crate::error::Error::Other(anyhow::anyhow!("cache open: {e}")))?;
     }
 
-    // --- Step 7: Cache lookup (FR26) ---
+    // --- Step 7: Cache lookup ---
     let existing = {
         let p = db_path.clone();
         let k = cell_key.clone();
@@ -190,12 +190,18 @@ async fn measure_and_persist(
 
     // Run task in container.
     crate::output::diag("lcrc scan: running canary task (this may take up to 120 s)…");
-    let outcome = sandbox
+    let run_result = sandbox
         .run_task(
             crate::constants::CONTAINER_IMAGE_DIGEST,
             workspace_dir.path(),
         )
-        .await
+        .await;
+
+    // Sandbox cleanup is best-effort; run regardless of run_task outcome so
+    // the network and containers are not left behind on task failure.
+    sandbox.cleanup().await;
+
+    let outcome = run_result
         .map_err(|e| crate::error::Error::Preflight(format!("run_task: {e}")))?;
 
     tracing::info!(
@@ -204,9 +210,6 @@ async fn measure_and_persist(
         duration_seconds = outcome.duration_seconds,
         "task completed",
     );
-
-    // Sandbox cleanup (best-effort) — explicit before handle drop.
-    sandbox.cleanup().await;
 
     // Construct cell for persistence.
     let scan_timestamp = crate::util::rfc3339_now();
@@ -226,7 +229,7 @@ async fn measure_and_persist(
         badges: vec![],
     };
 
-    // Write cell atomically (NFR-R2).
+    // Write cell atomically.
     {
         let p = db_path;
         tokio::task::spawn_blocking(move || -> Result<(), crate::cache::CacheError> {
@@ -235,7 +238,12 @@ async fn measure_and_persist(
         })
         .await
         .map_err(|e| crate::error::Error::Other(anyhow::anyhow!("spawn_blocking join: {e}")))?
-        .map_err(|e| crate::error::Error::Other(anyhow::anyhow!("cache write: {e}")))?;
+        .map_err(|e| match e {
+            crate::cache::CacheError::DuplicateCell { ref key } => crate::error::Error::Other(
+                anyhow::anyhow!("BUG: duplicate cell for key {key:?}; lookup-before-write invariant violated"),
+            ),
+            other => crate::error::Error::Other(anyhow::anyhow!("cache write: {other}")),
+        })?;
     }
 
     crate::output::diag(&format!(
@@ -266,6 +274,10 @@ async fn detect_backend_build() -> crate::cache::key::BackendInfo {
         .await;
 
     let Ok(output) = out else {
+        tracing::warn!(
+            target: "lcrc::scan::orchestrator",
+            "llama-server --version failed; cache key will use sentinel backend_build",
+        );
         return crate::cache::key::BackendInfo {
             name: "llama.cpp".into(),
             semver: "unknown".into(),
