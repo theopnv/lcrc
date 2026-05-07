@@ -12,6 +12,11 @@ milestone to make the deadline enforceable outside BMad context.
 
 ---
 
+## Deferred from: code review of 1-11-llama-server-lifecycle (2026-05-07)
+
+- **TOCTOU race between `allocate_free_port` listener drop and llama-server bind.** `allocate_free_port` binds to port 0, records the port, then drops the listener before llama-server binds. Another process (or concurrent call) can claim that port in the window. Acknowledged in dev notes as an accepted trade-off; fixing it would require passing the bound fd to llama-server (not supported by its CLI) or a retry loop in `start()`.
+- **Synchronous `std::thread::sleep(500ms)` in `ServerHandle::Drop` stalls the async executor.** In `current_thread` flavor (the test runtime), the 500ms blocking sleep freezes all other futures. Accepted in spec: async `Drop` is impossible in Rust, and llama-server needs a brief window after SIGTERM to flush in-flight writes. Revisit if executor stall becomes observable in production (multi-threaded runtime steals one worker thread per in-flight drop).
+
 ## Deferred from: code review of 1-10-sandbox-run-task-with-workspace-mount-custom-default-deny-network (2026-05-07)
 
 - **nft `ip filter FORWARD` chain existence not checked before rule installation.** `install_port_pin_rules` runs `nft add rule ip filter FORWARD ...` without first verifying the table/chain exists. On a fresh or non-standard Podman VM, the command may fail with a generic `nft rule install failed` error; error surfaces as `UnsupportedRuntime` either way. Proper fix would add an existence check and potentially create the chain, but requires knowing the full nft schema of the target VM.

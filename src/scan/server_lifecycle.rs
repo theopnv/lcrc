@@ -3,13 +3,13 @@
 //! [`LlamaServer`] owns startup configuration. [`ServerHandle`] represents a
 //! running server instance and terminates the process on [`Drop`].
 //!
-//! The server runs on the host (per NFR-I1) so containers reach it via
+//! The server runs on the host so containers reach it via
 //! `host.docker.internal` on the per-scan constrained network.
 
 /// Parameters passed to `llama-server` at startup.
 ///
 /// Maps directly to CLI flags: `--ctx-size` is the only parameter
-/// that varies per `(model, params)` group in Epic 1.
+/// that varies per `(model, params)` group.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Params {
@@ -31,6 +31,7 @@ pub enum ServerError {
 ///
 /// Construct with [`LlamaServer::new`] (60 s default timeout) or
 /// [`LlamaServer::with_timeout`] for tests that need a tighter deadline.
+#[derive(Debug)]
 pub struct LlamaServer {
     pub(crate) startup_timeout: std::time::Duration,
 }
@@ -68,11 +69,20 @@ impl LlamaServer {
         params: &Params,
     ) -> Result<ServerHandle, ServerError> {
         let port = allocate_free_port()?;
+        let model_str = model_path
+            .to_str()
+            .ok_or_else(|| ServerError::StartupFailure("model path is not valid UTF-8".into()))?;
+        tracing::info!(
+            target: "lcrc::scan::server_lifecycle",
+            port,
+            model = model_str,
+            "spawning llama-server",
+        );
 
         let mut process = tokio::process::Command::new("llama-server")
             .args([
                 "--model",
-                &model_path.to_string_lossy(),
+                model_str,
                 "--ctx-size",
                 &params.ctx.to_string(),
                 "--port",
@@ -142,11 +152,18 @@ impl Drop for ServerHandle {
         let Some(raw_pid) = self.process.id() else {
             return;
         };
+        tracing::info!(
+            target: "lcrc::scan::server_lifecycle",
+            port = self.port,
+            "terminating llama-server",
+        );
         #[allow(clippy::cast_possible_wrap)]
         let pid = Pid::from_raw(raw_pid as i32);
         let _ = kill(pid, Signal::SIGTERM);
         std::thread::sleep(std::time::Duration::from_millis(500));
-        let _ = kill(pid, Signal::SIGKILL);
+        if !matches!(self.process.try_wait(), Ok(Some(_))) {
+            let _ = kill(pid, Signal::SIGKILL);
+        }
     }
 }
 
@@ -157,7 +174,6 @@ fn allocate_free_port() -> Result<u16, ServerError> {
         .local_addr()
         .map_err(|e| ServerError::StartupFailure(format!("port address failed: {e}")))?
         .port();
-    // listener drops here; the OS marks the port free for the next bind
     Ok(port)
 }
 
@@ -204,6 +220,7 @@ async fn wait_for_ready(
             .await;
 
         if send_result.is_ok_and(|r| r.status() == reqwest::StatusCode::OK) {
+            tracing::info!(target: "lcrc::scan::server_lifecycle", port, "llama-server ready");
             return Ok(());
         }
 

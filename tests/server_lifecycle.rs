@@ -7,11 +7,26 @@
 
 use lcrc::scan::server_lifecycle::{LlamaServer, Params, ServerError};
 
-fn check_prerequisites() -> Option<std::path::PathBuf> {
+fn check_server_available() -> bool {
     if std::env::var("LCRC_INTEGRATION_TEST_SERVER").is_err() {
         eprintln!(
             "skipping: set LCRC_INTEGRATION_TEST_SERVER=1 and LCRC_TEST_MODEL_PATH=<path> to run"
         );
+        return false;
+    }
+    let binary_ok = std::process::Command::new("llama-server")
+        .arg("--version")
+        .output()
+        .is_ok();
+    if !binary_ok {
+        eprintln!("skipping: llama-server not found in PATH");
+        return false;
+    }
+    true
+}
+
+fn check_prerequisites() -> Option<std::path::PathBuf> {
+    if !check_server_available() {
         return None;
     }
     let Some(model_path) = std::env::var("LCRC_TEST_MODEL_PATH")
@@ -21,14 +36,6 @@ fn check_prerequisites() -> Option<std::path::PathBuf> {
         eprintln!("skipping: LCRC_TEST_MODEL_PATH not set");
         return None;
     };
-    let binary_ok = std::process::Command::new("llama-server")
-        .arg("--version")
-        .output()
-        .is_ok();
-    if !binary_ok {
-        eprintln!("skipping: llama-server not found in PATH");
-        return None;
-    }
     Some(model_path)
 }
 
@@ -67,18 +74,7 @@ async fn server_drop_terminates_process() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn server_corrupt_model_returns_err() {
-    if std::env::var("LCRC_INTEGRATION_TEST_SERVER").is_err() {
-        eprintln!(
-            "skipping: set LCRC_INTEGRATION_TEST_SERVER=1 and LCRC_TEST_MODEL_PATH=<path> to run"
-        );
-        return;
-    }
-    let binary_ok = std::process::Command::new("llama-server")
-        .arg("--version")
-        .output()
-        .is_ok();
-    if !binary_ok {
-        eprintln!("skipping: llama-server not found in PATH");
+    if !check_server_available() {
         return;
     }
 

@@ -1,3 +1,3 @@
-//! Scan subsystem: server lifecycle, orchestration, and task execution.
+//! Scan subsystem — llama-server process lifecycle.
 
 pub mod server_lifecycle;

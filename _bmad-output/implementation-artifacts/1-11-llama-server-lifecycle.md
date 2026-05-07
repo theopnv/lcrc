@@ -1,6 +1,6 @@
 # Story 1.11: llama-server lifecycle
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -39,7 +39,7 @@ so that each measurement has a known-ready server to talk to and no orphan proce
     //! The server runs on the host (per NFR-I1) so containers reach it via
     //! `host.docker.internal` on the per-scan constrained network.
     ```
-  - [ ] T2.2 Define `pub struct Params`:
+  - [x] T2.2 Define `pub struct Params`:
     ```rust
     /// Parameters passed to `llama-server` at startup.
     ///
@@ -468,3 +468,19 @@ claude-sonnet-4-6[1m]
 ### Change Log
 
 - 2026-05-07: Story 1.11 implemented — `LlamaServer` lifecycle API (`start`, health-gate, `Drop`-based teardown), unit + integration tests, CI checks all green.
+- 2026-05-07: Code review complete — 8 patches applied (see Review Findings), 2 deferred.
+
+## Review Findings
+
+> **Code review complete.** 0 `decision-needed`, 8 `patch` (all applied), 2 `defer`, ~8 dismissed as noise.
+
+- [x] [Review][Patch] Planning artifact refs in comments (`NFR-I1`, `Epic 1`, future submodule meta) [`src/scan.rs:1`, `src/scan/server_lifecycle.rs:6,12`]
+- [x] [Review][Patch] Non-UTF-8 model paths silently corrupted via `to_string_lossy()` [`src/scan/server_lifecycle.rs:75`]
+- [x] [Review][Patch] No tracing instrumentation for lifecycle events (spawn, ready, teardown) [`src/scan/server_lifecycle.rs`]
+- [x] [Review][Patch] `server_corrupt_model_returns_err` duplicates prerequisite guard logic [`tests/server_lifecycle.rs:70-83`]
+- [x] [Review][Patch] `Drop` sends SIGKILL unconditionally without checking if process already exited [`src/scan/server_lifecycle.rs:149`]
+- [x] [Review][Patch] T2.2 checkbox unchecked despite `Params` being implemented [`1-11-llama-server-lifecycle.md`]
+- [x] [Review][Patch] `allocate_free_port` comment explains what, not why (CLAUDE.md) [`src/scan/server_lifecycle.rs:160`]
+- [x] [Review][Patch] `LlamaServer` missing `#[derive(Debug)]` [`src/scan/server_lifecycle.rs:34`]
+- [x] [Review][Defer] TOCTOU race between `allocate_free_port` listener drop and llama-server bind [`src/scan/server_lifecycle.rs:153-162`] — deferred, pre-existing (acknowledged in dev notes as accepted)
+- [x] [Review][Defer] Synchronous `std::thread::sleep(500ms)` in `Drop` stalls single-threaded executor [`src/scan/server_lifecycle.rs:148`] — deferred, pre-existing (async `Drop` is impossible in Rust; accepted in spec)
