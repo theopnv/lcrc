@@ -229,6 +229,12 @@ async fn measure_and_persist(
         badges: vec![],
     };
 
+    let report_dir = db_path
+        .parent()
+        .ok_or_else(|| crate::error::Error::Preflight("db_path has no parent directory".into()))?
+        .join("reports");
+    let cell_for_report = cell.clone();
+
     // Write cell atomically.
     {
         let p = db_path;
@@ -246,6 +252,15 @@ async fn measure_and_persist(
             }
             other => crate::error::Error::Other(anyhow::anyhow!("cache write: {other}")),
         })?;
+    }
+
+    if let Err(e) = crate::report::render_html(&cell_for_report, &report_dir).await {
+        tracing::warn!(
+            target: "lcrc::scan::orchestrator",
+            error = %e,
+            "HTML report write failed; scan result is persisted in cache",
+        );
+        crate::output::diag(&format!("lcrc scan: warning — report write failed: {e}"));
     }
 
     crate::output::diag(&format!(

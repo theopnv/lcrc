@@ -9,6 +9,7 @@ pub mod error;
 pub mod exit_code;
 pub mod machine;
 pub mod output;
+pub mod report;
 pub mod sandbox;
 pub mod scan;
 pub mod util;

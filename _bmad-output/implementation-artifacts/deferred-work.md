@@ -12,6 +12,10 @@ milestone to make the deadline enforceable outside BMad context.
 
 ---
 
+## Deferred from: code review of 1-13-one-row-html-report-rendering (2026-05-07)
+
+- **Stale `latest.html.tmp` on partial failure.** If `tokio::fs::write` succeeds but the subsequent `rename` fails (e.g. cross-device move, permission error), `latest.html.tmp` is left on disk with valid content but no timestamp. The next successful run overwrites it, so this is self-healing; however, a user inspecting the directory between runs sees stale data with no age indicator. A cleanup-on-error path (unlinking the tmp file on rename failure) would close the gap; deferred because the recovery path is documented and the window is very narrow under normal operation.
+
 ## Deferred from: code review of 1-12-end-to-end-one-cell-scan-no-html-yet (2026-05-07)
 
 - **Port TOCTOU in `allocate_free_port` (pre-existing in `server_lifecycle.rs`).** `allocate_free_port` binds to port 0, records the assigned port, drops the listener, then passes the port number to `llama-server --port`. Another process can claim the port in that window, causing a non-deterministic `ServerError::StartupFailure`. Fixing requires either a retry loop in `start()` or a platform-specific SO_REUSEPORT + fd-passing approach neither of which `llama-server`'s CLI supports today.

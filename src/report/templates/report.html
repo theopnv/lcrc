@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lcrc report</title>
+<style>
+body{font-family:monospace;margin:2em}
+table{border-collapse:collapse}
+th,td{border:1px solid #ccc;padding:.4em .8em}
+th{background:#f0f0f0}
+.pass{color:green}
+.fail{color:red}
+</style>
+</head>
+<body>
+<h1>lcrc report</h1>
+<table>
+<thead>
+<tr><th>Model</th><th>Task</th><th>Result</th><th>Scanned</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>{{ model_ident }}</td>
+<td>{{ task_id }}</td>
+<td class="{% if pass %}pass{% else %}fail{% endif %}">{% if pass %}PASS{% else %}FAIL{% endif %}</td>
+<td>{{ scan_timestamp }}</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

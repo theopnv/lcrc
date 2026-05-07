@@ -1,0 +1,36 @@
+---
+source: tests/report_render.rs
+assertion_line: 35
+expression: html
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lcrc report</title>
+<style>
+body{font-family:monospace;margin:2em}
+table{border-collapse:collapse}
+th,td{border:1px solid #ccc;padding:.4em .8em}
+th{background:#f0f0f0}
+.pass{color:green}
+.fail{color:red}
+</style>
+</head>
+<body>
+<h1>lcrc report</h1>
+<table>
+<thead>
+<tr><th>Model</th><th>Task</th><th>Result</th><th>Scanned</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>abcdef01</td>
+<td>swe-bench-pro:canary</td>
+<td class="pass">PASS</td>
+<td>2026-05-07T00:00:00.000Z</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>
