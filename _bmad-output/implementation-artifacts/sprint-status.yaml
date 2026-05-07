@@ -20,6 +20,7 @@
 # (1-12-end-to-end-one-cell-scan-no-html-yet: review → done on 2026-05-07 after code review)
 # (1-13-one-row-html-report-rendering: backlog → ready-for-dev on 2026-05-07 via create-story)
 # (1-13-one-row-html-report-rendering: review → done on 2026-05-07 after code review)
+# (1-14-vendor-per-task-container-image-dockerfile-requirements-bootstrap-ghcr-publish: backlog → ready-for-dev on 2026-05-07 via create-story)
 # (last_updated reflects most recent story-status change)
 # project: lcrc
 # project_key: NOKEY
@@ -56,7 +57,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-30
-last_updated: 2026-05-07  # story 1-13 review → done after code review
+last_updated: 2026-05-07  # story 1-14 backlog → ready-for-dev via create-story
 project: lcrc
 project_key: NOKEY
 tracking_system: file-system
@@ -77,7 +78,7 @@ development_status:
   1-11-llama-server-lifecycle: done
   1-12-end-to-end-one-cell-scan-no-html-yet: done
   1-13-one-row-html-report-rendering: done
-  1-14-vendor-per-task-container-image-dockerfile-requirements-bootstrap-ghcr-publish: backlog
+  1-14-vendor-per-task-container-image-dockerfile-requirements-bootstrap-ghcr-publish: ready-for-dev
   epic-1-retrospective: optional
 
   epic-2: backlog
