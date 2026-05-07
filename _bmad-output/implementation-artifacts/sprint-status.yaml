@@ -1,5 +1,7 @@
 # generated: 2026-04-30
 # last_updated: 2026-05-07
+# (1-10-sandbox-run-task-with-workspace-mount-custom-default-deny-network: backlog → ready-for-dev on 2026-05-07 via create-story)
+# (1-10-sandbox-run-task-with-workspace-mount-custom-default-deny-network: review → done on 2026-05-07 after code review)
 # (1-5-machine-fingerprint-module: in-progress → done on 2026-05-06 after code review)
 # (1-6-cache-key-helpers-in-src-cache-key-rs: backlog → ready-for-dev on 2026-05-06 via create-story)
 # (1-6-cache-key-helpers-in-src-cache-key-rs: ready-for-dev → in-progress → review on 2026-05-06 via dev-story)
@@ -49,7 +51,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-30
-last_updated: 2026-05-07
+last_updated: 2026-05-07  # story 1-10 review → done
 project: lcrc
 project_key: NOKEY
 tracking_system: file-system
@@ -66,7 +68,7 @@ development_status:
   1-7-sqlite-schema-migrations-framework: done
   1-8-cache-cell-write-read-api-with-atomic-semantics: done
   1-9-container-runtime-preflight-with-socket-precedence-chain: done
-  1-10-sandbox-run-task-with-workspace-mount-custom-default-deny-network: backlog
+  1-10-sandbox-run-task-with-workspace-mount-custom-default-deny-network: done
   1-11-llama-server-lifecycle: backlog
   1-12-end-to-end-one-cell-scan-no-html-yet: backlog
   1-13-one-row-html-report-rendering: backlog

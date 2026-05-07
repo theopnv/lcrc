@@ -1196,6 +1196,7 @@ dependencies = [
  "etcetera",
  "figment",
  "fs2",
+ "futures-util",
  "ggus",
  "indicatif",
  "insta",

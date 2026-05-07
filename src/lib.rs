@@ -4,6 +4,7 @@
 
 pub mod cache;
 pub mod cli;
+pub mod constants;
 pub mod error;
 pub mod exit_code;
 pub mod machine;

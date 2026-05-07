@@ -69,3 +69,28 @@ fn scan_exits_11_with_setup_instructions_when_no_runtime() {
         output.stdout
     );
 }
+
+#[test]
+fn scan_exits_11_on_unsupported_runtime_for_network_isolation() {
+    let Ok(socket) = std::env::var("LCRC_TEST_UNSUPPORTED_RUNTIME_SOCKET") else {
+        eprintln!(
+            "skipping: set LCRC_TEST_UNSUPPORTED_RUNTIME_SOCKET to a non-Podman Docker socket"
+        );
+        return;
+    };
+
+    let output = Command::cargo_bin("lcrc")
+        .unwrap()
+        .arg("scan")
+        .env("LCRC_RUNTIME_DOCKER_HOST", &socket)
+        .assert()
+        .code(ExitCode::PreflightFailed.as_i32())
+        .get_output()
+        .clone();
+
+    let stderr = String::from_utf8(output.stderr.clone()).unwrap();
+    assert!(
+        stderr.contains("structural port-pin unavailable"),
+        "stderr missing 'structural port-pin unavailable': {stderr}"
+    );
+}

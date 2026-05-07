@@ -7,6 +7,7 @@
 ///
 /// Returns [`crate::error::Error::Preflight`] when the container-runtime
 /// preflight detects no reachable Docker-Engine-API-compatible socket,
+/// when the sandbox cannot install structural iptables port-pin rules,
 /// or when the async runtime fails to initialize.
 pub fn run() -> Result<(), crate::error::Error> {
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -22,6 +23,12 @@ pub fn run() -> Result<(), crate::error::Error> {
                     source = probe.source.name(),
                     "detected container runtime",
                 );
+
+                let sandbox = crate::sandbox::Sandbox::new(&probe, 11434)
+                    .await
+                    .map_err(|e| crate::error::Error::Preflight(format!("{e}")))?;
+                sandbox.cleanup().await;
+
                 crate::output::diag("`lcrc scan` is not yet implemented in this build.");
                 Ok(())
             }
