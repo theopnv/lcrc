@@ -1,6 +1,6 @@
 # Story 1.13: One-row HTML report rendering
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -541,3 +541,10 @@ claude-sonnet-4-6[1m]
 - `tests/report_render.rs` — new: snapshot + atomic-write + permissions integration tests
 - `tests/snapshots/report_render__report_snapshot_pass_cell.snap` — new: insta snapshot
 - `tests/snapshots/report_render__report_snapshot_fail_cell.snap` — new: insta snapshot
+
+### Review Findings
+
+- [x] [Review][Patch] render_html failure after write_cell is fatal — cell persisted but report permanently absent on cache-hit re-runs [`src/scan/orchestrator.rs`] — **fixed**: downgraded to `tracing::warn!` + `output::diag`; scan no longer fails on report-write error
+- [x] [Review][Patch] FR codes in module-doc comment violate planning-artifact-reference constraint [`tests/report_render.rs:1`] — **fixed**: removed `(FR32, FR33)` from doc comment
+- [x] [Review][Patch] Dead `[package.metadata.askama]` section in `Cargo.toml` — askama 0.12 reads `askama.toml`, not this section [`Cargo.toml:82`] — **fixed**: section removed; `askama.toml` is the sole config source
+- [x] [Review][Defer] Stale `latest.html.tmp` on partial failure — if write succeeds but rename fails, the tmp file persists until next successful run [`src/report.rs:53`] — deferred, self-healing on next invocation

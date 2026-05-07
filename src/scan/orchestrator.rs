@@ -254,9 +254,14 @@ async fn measure_and_persist(
         })?;
     }
 
-    crate::report::render_html(&cell_for_report, &report_dir)
-        .await
-        .map_err(|e| crate::error::Error::Other(anyhow::anyhow!("render report: {e}")))?;
+    if let Err(e) = crate::report::render_html(&cell_for_report, &report_dir).await {
+        tracing::warn!(
+            target: "lcrc::scan::orchestrator",
+            error = %e,
+            "HTML report write failed; scan result is persisted in cache",
+        );
+        crate::output::diag(&format!("lcrc scan: warning — report write failed: {e}"));
+    }
 
     crate::output::diag(&format!(
         "lcrc scan: done — pass={}, duration={:.1}s",

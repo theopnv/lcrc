@@ -1,4 +1,4 @@
-//! Integration tests for the HTML report renderer (FR32, FR33).
+//! Integration tests for the HTML report renderer.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
