@@ -229,6 +229,12 @@ async fn measure_and_persist(
         badges: vec![],
     };
 
+    let report_dir = db_path
+        .parent()
+        .ok_or_else(|| crate::error::Error::Preflight("db_path has no parent directory".into()))?
+        .join("reports");
+    let cell_for_report = cell.clone();
+
     // Write cell atomically.
     {
         let p = db_path;
@@ -247,6 +253,10 @@ async fn measure_and_persist(
             other => crate::error::Error::Other(anyhow::anyhow!("cache write: {other}")),
         })?;
     }
+
+    crate::report::render_html(&cell_for_report, &report_dir)
+        .await
+        .map_err(|e| crate::error::Error::Other(anyhow::anyhow!("render report: {e}")))?;
 
     crate::output::diag(&format!(
         "lcrc scan: done — pass={}, duration={:.1}s",

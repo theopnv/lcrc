@@ -79,6 +79,9 @@ insta = { version = "1", features = ["yaml"] }
 unsafe_code = "forbid"
 missing_docs = "warn"
 
+[package.metadata.askama]
+dirs = ["src/report/templates"]
+
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 unwrap_used = "deny"

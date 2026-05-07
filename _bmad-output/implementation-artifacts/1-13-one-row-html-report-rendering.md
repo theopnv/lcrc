@@ -1,6 +1,6 @@
 # Story 1.13: One-row HTML report rendering
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,20 +24,20 @@ so that I can open the report in a browser and verify the renderer interlocks wi
 
 ## Tasks / Subtasks
 
-- [ ] **T1. Add `pub mod report;` to `src/lib.rs`** (AC: all)
-  - [ ] T1.1 Insert `pub mod report;` into `src/lib.rs` in alphabetical order after `pub mod output;` and before `pub mod sandbox;`.
+- [x] **T1. Add `pub mod report;` to `src/lib.rs`** (AC: all)
+  - [x] T1.1 Insert `pub mod report;` into `src/lib.rs` in alphabetical order after `pub mod output;` and before `pub mod sandbox;`.
 
-- [ ] **T2. Configure askama template directory in `Cargo.toml`** (AC: all)
-  - [ ] T2.1 Add the following section at the end of `Cargo.toml` (after `[lints.clippy]`):
+- [x] **T2. Configure askama template directory in `Cargo.toml`** (AC: all)
+  - [x] T2.1 Add the following section at the end of `Cargo.toml` (after `[lints.clippy]`):
     ```toml
     [package.metadata.askama]
     dirs = ["src/report/templates"]
     ```
     This tells askama's build script to look for template files in `src/report/templates/` relative to the crate manifest directory, matching the architecture's directory structure. Without this, askama defaults to `templates/` at the crate root.
 
-- [ ] **T3. Create `src/report/templates/report.html`** (AC: 2, 4)
-  - [ ] T3.1 Create directory `src/report/templates/` (not a Rust module — contains only askama template files).
-  - [ ] T3.2 Create `src/report/templates/report.html`:
+- [x] **T3. Create `src/report/templates/report.html`** (AC: 2, 4)
+  - [x] T3.1 Create directory `src/report/templates/` (not a Rust module — contains only askama template files).
+  - [x] T3.2 Create `src/report/templates/report.html`:
     ```html
     <!DOCTYPE html>
     <html lang="en">
@@ -73,8 +73,8 @@ so that I can open the report in a browser and verify the renderer interlocks wi
     ```
     **CSS is inlined** — no external stylesheet, font, or script references (AC4). `{{ }}` expressions are HTML-escaped by askama by default in `.html` templates. `{% if %}`/`{% else %}`/`{% endif %}` are Jinja2-style control blocks.
 
-- [ ] **T4. Create `src/report.rs`** (AC: 1, 2, 3, 4, 5)
-  - [ ] T4.1 Add file-level doc:
+- [x] **T4. Create `src/report.rs`** (AC: 1, 2, 3, 4, 5)
+  - [x] T4.1 Add file-level doc:
     ```rust
     //! HTML report renderer.
     //!
@@ -83,7 +83,7 @@ so that I can open the report in a browser and verify the renderer interlocks wi
     //! atomic: temp file written then renamed, so a crash mid-write leaves
     //! the previous `latest.html` intact.
     ```
-  - [ ] T4.2 Define `ReportTemplate` with lifetime annotation (borrows from `&Cell`):
+  - [x] T4.2 Define `ReportTemplate` with lifetime annotation (borrows from `&Cell`):
     ```rust
     use askama::Template;
     use crate::cache::cell::Cell;
@@ -112,7 +112,7 @@ so that I can open the report in a browser and verify the renderer interlocks wi
     ```
     **`model_ident` is the first 8 hex chars of `model_sha`** — Epic 1 has no model name; full model discovery lands in Story 2.1. `.min(8)` guards the slice in tests that use short SHA strings.
 
-  - [ ] T4.3 Implement the public `render_string` function (pure, synchronous, used by tests):
+  - [x] T4.3 Implement the public `render_string` function (pure, synchronous, used by tests):
     ```rust
     /// Render the HTML string for a single cell row without performing any I/O.
     ///
@@ -126,7 +126,7 @@ so that I can open the report in a browser and verify the renderer interlocks wi
     }
     ```
 
-  - [ ] T4.4 Implement private `write_report_atomic`:
+  - [x] T4.4 Implement private `write_report_atomic`:
     ```rust
     /// Write `html` to `path` via temp file + atomic rename.
     ///
@@ -154,7 +154,7 @@ so that I can open the report in a browser and verify the renderer interlocks wi
     }
     ```
 
-  - [ ] T4.5 Implement the public `render_html` entry point:
+  - [x] T4.5 Implement the public `render_html` entry point:
     ```rust
     /// Render and atomically write `latest.html` to `report_dir`.
     ///
@@ -188,8 +188,8 @@ so that I can open the report in a browser and verify the renderer interlocks wi
     }
     ```
 
-- [ ] **T5. Update `src/scan/orchestrator.rs::measure_and_persist`** (AC: 1, 2, 3)
-  - [ ] T5.1 In `measure_and_persist`, compute `report_dir` from `db_path` **before** `db_path` is moved into the `spawn_blocking` closure (it's moved via `let p = db_path;`). Insert before the `// Write cell atomically.` comment:
+- [x] **T5. Update `src/scan/orchestrator.rs::measure_and_persist`** (AC: 1, 2, 3)
+  - [x] T5.1 In `measure_and_persist`, compute `report_dir` from `db_path` **before** `db_path` is moved into the `spawn_blocking` closure (it's moved via `let p = db_path;`). Insert before the `// Write cell atomically.` comment:
     ```rust
     // Derive the report dir from the same data-dir parent as lcrc.db.
     // db_path = data_dir/lcrc/lcrc.db → parent = data_dir/lcrc → reports = data_dir/lcrc/reports.
@@ -201,26 +201,26 @@ so that I can open the report in a browser and verify the renderer interlocks wi
         .join("reports");
     ```
 
-  - [ ] T5.2 Clone `cell` before it is moved into the `spawn_blocking` closure, so it is available for the report step after the write. Insert immediately before `// Write cell atomically.`:
+  - [x] T5.2 Clone `cell` before it is moved into the `spawn_blocking` closure, so it is available for the report step after the write. Insert immediately before `// Write cell atomically.`:
     ```rust
     let cell_for_report = cell.clone();
     ```
 
-  - [ ] T5.3 After the `write_cell` `spawn_blocking` block succeeds (after the `}` closing the atomic write block, before `crate::output::diag("lcrc scan: done…")`), add:
+  - [x] T5.3 After the `write_cell` `spawn_blocking` block succeeds (after the `}` closing the atomic write block, before `crate::output::diag("lcrc scan: done…")`), add:
     ```rust
     crate::report::render_html(&cell_for_report, &report_dir)
         .await
         .map_err(|e| crate::error::Error::Other(anyhow::anyhow!("render report: {e}")))?;
     ```
 
-  - [ ] T5.4 Verify that `db_path` is still consumed correctly after T5.1 (the `let p = db_path;` line remains; no change needed to the spawn_blocking body). `cell` is consumed by `spawn_blocking`; `cell_for_report` (the clone) is consumed by `render_html`. Both bindings disappear cleanly at end of scope. The `#[allow(clippy::too_many_lines)]` on `run()` may need extending to `measure_and_persist` if clippy triggers.
+  - [x] T5.4 Verify that `db_path` is still consumed correctly after T5.1 (the `let p = db_path;` line remains; no change needed to the spawn_blocking body). `cell` is consumed by `spawn_blocking`; `cell_for_report` (the clone) is consumed by `render_html`. Both bindings disappear cleanly at end of scope. The `#[allow(clippy::too_many_lines)]` on `run()` may need extending to `measure_and_persist` if clippy triggers.
 
-- [ ] **T6. Integration test `tests/report_render.rs`** (AC: 1, 2, 3, 4, 5)
-  - [ ] T6.1 Add file-level doc:
+- [x] **T6. Integration test `tests/report_render.rs`** (AC: 1, 2, 3, 4, 5)
+  - [x] T6.1 Add file-level doc:
     ```rust
     //! Integration tests for the HTML report renderer (FR32, FR33).
     ```
-  - [ ] T6.2 Implement helper `synthetic_cell()` — mirrors the pattern from `src/cache/cell.rs`:
+  - [x] T6.2 Implement helper `synthetic_cell()` — mirrors the pattern from `src/cache/cell.rs`:
     ```rust
     use lcrc::cache::cell::{Cell, CellKey};
 
@@ -250,7 +250,7 @@ so that I can open the report in a browser and verify the renderer interlocks wi
         }
     }
     ```
-  - [ ] T6.3 Snapshot test for pass cell (uses `insta`):
+  - [x] T6.3 Snapshot test for pass cell (uses `insta`):
     ```rust
     #[test]
     fn report_snapshot_pass_cell() {
@@ -259,7 +259,7 @@ so that I can open the report in a browser and verify the renderer interlocks wi
         insta::assert_snapshot!(html);
     }
     ```
-  - [ ] T6.4 Snapshot test for fail cell:
+  - [x] T6.4 Snapshot test for fail cell:
     ```rust
     #[test]
     fn report_snapshot_fail_cell() {
@@ -268,7 +268,7 @@ so that I can open the report in a browser and verify the renderer interlocks wi
         insta::assert_snapshot!(html);
     }
     ```
-  - [ ] T6.5 Async atomic-write test (verifies AC3: temp file → rename):
+  - [x] T6.5 Async atomic-write test (verifies AC3: temp file → rename):
     ```rust
     #[tokio::test(flavor = "current_thread")]
     async fn report_atomic_write_creates_latest_html() {
@@ -286,7 +286,7 @@ so that I can open the report in a browser and verify the renderer interlocks wi
         assert!(!dir.path().join("latest.html.tmp").exists());
     }
     ```
-  - [ ] T6.6 File-permission test (AC5 — unix only):
+  - [x] T6.6 File-permission test (AC5 — unix only):
     ```rust
     #[cfg(unix)]
     #[tokio::test(flavor = "current_thread")]
@@ -301,18 +301,18 @@ so that I can open the report in a browser and verify the renderer interlocks wi
         assert_eq!(mode, 0o644, "expected 0o644, got {mode:o}");
     }
     ```
-  - [ ] T6.7 Run `cargo insta review` after first run to accept snapshots. Committed `.snap` files go in `tests/snapshots/`.
+  - [x] T6.7 Run `cargo insta review` after first run to accept snapshots. Committed `.snap` files go in `tests/snapshots/`.
 
-- [ ] **T7. Local CI mirror** (AC: all)
-  - [ ] T7.1 `cargo build` — new module and template compile; askama build script finds template in `src/report/templates/report.html`.
-  - [ ] T7.2 `cargo fmt --check` — rustfmt clean.
-  - [ ] T7.3 `cargo clippy --all-targets --all-features -- -D warnings`. Watch for:
+- [x] **T7. Local CI mirror** (AC: all)
+  - [x] T7.1 `cargo build` — new module and template compile; askama build script finds template in `src/report/templates/report.html`.
+  - [x] T7.2 `cargo fmt --check` — rustfmt clean.
+  - [x] T7.3 `cargo clippy --all-targets --all-features -- -D warnings`. Watch for:
     - `missing_docs` on every `pub` item in `src/report.rs`.
     - `clippy::module_name_repetitions` — not expected here, but check.
     - `clippy::too_many_lines` on `measure_and_persist` if the added lines push it over 100.
     - Any lint on `#[cfg(unix)]` blocks in tests (should be fine).
-  - [ ] T7.4 `cargo test` — all 140+ pre-existing tests pass. New snapshot tests in `tests/report_render.rs` pass after `cargo insta review`.
-  - [ ] T7.5 Scope check — confirm `src/lib.rs` now lists `pub mod report;`:
+  - [x] T7.4 `cargo test` — all 140+ pre-existing tests pass. New snapshot tests in `tests/report_render.rs` pass after `cargo insta review`.
+  - [x] T7.5 Scope check — confirm `src/lib.rs` now lists `pub mod report;`:
     ```bash
     grep "pub mod report" src/lib.rs
     ```
@@ -521,4 +521,23 @@ claude-sonnet-4-6[1m]
 
 ### Completion Notes List
 
+- Implemented `src/report.rs` with `render_string` (pure), `render_html` (async), and private `write_report_atomic` using tokio atomic write + rename pattern.
+- Used `askama.toml` (crate root) for template directory config — `[package.metadata.askama]` in `Cargo.toml` is not picked up by askama 0.12; `askama.toml` with `[general] dirs = ["src/report/templates"]` is required instead. Both are present.
+- `model_ident` is the first 8 hex chars of `model_sha` using `.min(8)` slice guard.
+- Template uses Jinja2-style `{% if pass %}` with inline CSS — fully self-contained, no external resources.
+- `write_report_atomic` sets 0o644 permissions on the temp file before rename so the final `latest.html` atomically appears with correct mode regardless of process umask.
+- Integration test file suppresses `clippy::unwrap_used` at file level (matches project pattern for integration test files).
+- 144 tests pass (4 new in `tests/report_render.rs`: 2 snapshot, 1 atomic-write I/O, 1 permission check); 0 regressions.
+- Snapshot files accepted and committed to `tests/snapshots/`.
+
 ### File List
+
+- `Cargo.toml` — added `[package.metadata.askama]` section
+- `askama.toml` — new; `[general] dirs = ["src/report/templates"]` for askama build script
+- `src/lib.rs` — added `pub mod report;`
+- `src/report.rs` — new: `render_html`, `render_string`, `write_report_atomic`, `ReportTemplate`
+- `src/report/templates/report.html` — new: askama one-row HTML template
+- `src/scan/orchestrator.rs` — added `report_dir` derivation, `cell_for_report` clone, and `render_html` call after `write_cell`
+- `tests/report_render.rs` — new: snapshot + atomic-write + permissions integration tests
+- `tests/snapshots/report_render__report_snapshot_pass_cell.snap` — new: insta snapshot
+- `tests/snapshots/report_render__report_snapshot_fail_cell.snap` — new: insta snapshot
