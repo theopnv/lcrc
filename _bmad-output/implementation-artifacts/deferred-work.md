@@ -12,6 +12,14 @@ milestone to make the deadline enforceable outside BMad context.
 
 ---
 
+## Deferred from: code review of 1-14-vendor-per-task-container-image-dockerfile-requirements-bootstrap-ghcr-publish (2026-05-07)
+
+- **Base image `debian:bookworm-slim` not digest-pinned.** Rebuilding the Dockerfile at a future date may pull different apt package versions, silently producing a different environment and a different image digest from the one stored in `CONTAINER_IMAGE_DIGEST`. Fixing requires pinning `FROM debian:bookworm-slim@sha256:<hash>` and rotating the pin on deliberate base-image updates. Architecture AR-13 specifies the tag only; full reproducibility is a Story 7.x hardening item.
+- **Transitive pip dependencies not hash-pinned.** `mini-swe-agent==0.1.0` and `pytest==8.3.5` are direct-version pinned, but their transitive dependencies are resolved at install time. A `pip-compile`-generated lockfile with `--require-hashes` would close the gap. Explicitly deferred in dev notes to Story 7.x.
+- **`mini-swe-agent==0.1.0` availability on PyPI unconfirmed.** If the package is private or differently named, `docker build` fails at pip install time. Dev notes document fallback Options B (GitHub archive) and C (local source). Revisit when Story 7.3 sets up the real GHCR publish with the confirmed install method.
+- **Multi-arch manifest list may cause digest discrepancy.** If the image is eventually published as a multi-arch manifest list, `CONTAINER_IMAGE_DIGEST` captured from `docker inspect` on one platform may not match the manifest digest on another platform. Out of scope for Epic 1 (single-arch bootstrap); revisit in Story 7.3.
+- **`import mini_swe_agent` module name unverified.** The PyPI package `mini-swe-agent` conventionally maps to `mini_swe_agent` (hyphens → underscores), but the actual top-level module name depends on the package's `__init__.py`. Cannot verify without installing the package.
+
 ## Deferred from: code review of 1-13-one-row-html-report-rendering (2026-05-07)
 
 - **Stale `latest.html.tmp` on partial failure.** If `tokio::fs::write` succeeds but the subsequent `rename` fails (e.g. cross-device move, permission error), `latest.html.tmp` is left on disk with valid content but no timestamp. The next successful run overwrites it, so this is self-healing; however, a user inspecting the directory between runs sees stale data with no age indicator. A cleanup-on-error path (unlinking the tmp file on rename failure) would close the gap; deferred because the recovery path is documented and the window is very narrow under normal operation.

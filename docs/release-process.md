@@ -1,17 +1,17 @@
 # Release Process
 
-## Bootstrap Image Publish (manual; superseded by Story 7.3 release automation)
+## Bootstrap Image Publish (manual; superseded by automated release workflow)
 
 This section documents the one-time manual publish of the per-task container image to GHCR.
-Story 7.3 automates this via `.github/workflows/release.yml`; the steps below are the historical
-bootstrap record and the fallback procedure if automation is unavailable.
+The automated release workflow (`.github/workflows/release.yml`) supersedes these steps; the
+bootstrap record below is the historical baseline and a fallback if automation is unavailable.
 
 ### Prerequisites
 
 - Docker daemon running (Docker Desktop, Colima, OrbStack, or equivalent)
-- GitHub PAT with `write:packages` scope:
+- GitHub PAT with `write:packages` scope — set without writing to shell history:
   ```bash
-  export GITHUB_PAT=ghp_...
+  read -rs GITHUB_PAT && export GITHUB_PAT
   ```
 - Replace `<org>` and `<github-username>` with real values throughout all commands
 
@@ -28,7 +28,7 @@ echo $GITHUB_PAT | docker login ghcr.io -u <github-username> --password-stdin
 The build context is `image/` so `COPY requirements.txt` resolves within that directory.
 
 ```bash
-docker build image/ -t ghcr.io/<org>/lcrc-task:0.1.0
+docker build --no-cache image/ -t ghcr.io/<org>/lcrc-task:0.1.0
 ```
 
 **3. Push to GHCR**
@@ -42,6 +42,7 @@ docker push ghcr.io/<org>/lcrc-task:0.1.0
 ```bash
 docker inspect --format '{{index .RepoDigests 0}}' ghcr.io/<org>/lcrc-task:0.1.0
 # Example output: ghcr.io/<org>/lcrc-task:0.1.0@sha256:abc123...64hexchars
+# An empty result means the push did not complete — verify step 3 before continuing.
 ```
 
 **5. Update `src/constants.rs`**

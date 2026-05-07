@@ -1,6 +1,6 @@
 # Story 1.14: Vendor per-task container image (Dockerfile + requirements + bootstrap GHCR publish)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -298,6 +298,19 @@ None.
 - `image/requirements.txt` — NEW
 - `docs/release-process.md` — NEW
 
+### Review Findings
+
+- [x] [Review][Patch] Story references ("Story 7.3") in `docs/release-process.md` violate CLAUDE.md planning-ref rule [`docs/release-process.md:3,6`]
+- [x] [Review][Patch] `export GITHUB_PAT=ghp_...` writes credential to shell history [`docs/release-process.md:14`]
+- [x] [Review][Patch] No `--no-cache` on `docker build` — stale apt layer can produce a non-canonical digest [`docs/release-process.md:31`]
+- [x] [Review][Patch] `docker inspect` step gives no recovery guidance when `RepoDigests` is empty [`docs/release-process.md:43`]
+- [x] [Review][Defer] Base image `debian:bookworm-slim` not digest-pinned; rebuild at different time may pull different packages [`image/Dockerfile:1`] — deferred, pre-existing architecture decision (AR-13 specifies tag only)
+- [x] [Review][Defer] Transitive pip deps not hash-pinned; `--require-hashes` deferred to Story 7.x per dev notes [`image/requirements.txt`] — deferred, pre-existing
+- [x] [Review][Defer] `mini-swe-agent==0.1.0` may not be on PyPI; fallback options documented in dev notes [`image/requirements.txt:1`] — deferred, pre-existing
+- [x] [Review][Defer] Multi-arch manifest list may cause digest discrepancy between build and runtime platforms [`image/Dockerfile`] — deferred, out of scope for Epic 1
+- [x] [Review][Defer] `import mini_swe_agent` module name unverifiable without live environment [`docs/release-process.md:65`] — deferred, cannot verify without installed package
+
 ## Change Log
 
 - 2026-05-07: Story implemented — created `image/Dockerfile`, `image/requirements.txt`, `docs/release-process.md`; all CI checks pass (144 tests, 0 regressions). T4 bootstrap publish is a pending HUMAN step; `CONTAINER_IMAGE_DIGEST` placeholder remains until human executes T4 and T5.
+- 2026-05-07: Code review — 4 patches applied to `docs/release-process.md`: removed planning-artifact references, changed `export GITHUB_PAT` to `read -rs` to avoid shell history, added `--no-cache` to `docker build`, added empty-`RepoDigests` recovery note. 5 findings deferred (base image pinning, transitive hash pinning, PyPI availability, multi-arch digest, module name). Story marked done.
