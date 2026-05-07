@@ -201,8 +201,8 @@ async fn measure_and_persist(
     // the network and containers are not left behind on task failure.
     sandbox.cleanup().await;
 
-    let outcome = run_result
-        .map_err(|e| crate::error::Error::Preflight(format!("run_task: {e}")))?;
+    let outcome =
+        run_result.map_err(|e| crate::error::Error::Preflight(format!("run_task: {e}")))?;
 
     tracing::info!(
         target: "lcrc::scan::orchestrator",
@@ -239,9 +239,11 @@ async fn measure_and_persist(
         .await
         .map_err(|e| crate::error::Error::Other(anyhow::anyhow!("spawn_blocking join: {e}")))?
         .map_err(|e| match e {
-            crate::cache::CacheError::DuplicateCell { ref key } => crate::error::Error::Other(
-                anyhow::anyhow!("BUG: duplicate cell for key {key:?}; lookup-before-write invariant violated"),
-            ),
+            crate::cache::CacheError::DuplicateCell { ref key } => {
+                crate::error::Error::Other(anyhow::anyhow!(
+                    "BUG: duplicate cell for key {key:?}; lookup-before-write invariant violated"
+                ))
+            }
             other => crate::error::Error::Other(anyhow::anyhow!("cache write: {other}")),
         })?;
     }
