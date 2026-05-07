@@ -1,6 +1,6 @@
 # Story 1.7: SQLite schema + migrations framework
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -34,19 +34,19 @@ so that cells can be persisted with the architecture-locked PK and the cache sur
 
 ## Tasks / Subtasks
 
-- [ ] **T1. Update `src/cache.rs` — declare submodules + introduce `CacheError`** (AC: 1, 2, 4, 5)
-  - [ ] T1.1 Replace the existing `pub mod key;` line with two new module declarations preserving alphabetical order: `pub mod key; pub mod migrations; pub mod schema;`. Update the file-level `//!` doc to note that `migrations` owns `PRAGMA user_version` discipline + the open/init entry point and `schema` owns the SQL DDL constants.
-  - [ ] T1.2 Add a `pub enum CacheError` typed-error enum to `src/cache.rs` via `thiserror::Error`. Variants — exactly four in this story:
+- [x] **T1. Update `src/cache.rs` — declare submodules + introduce `CacheError`** (AC: 1, 2, 4, 5)
+  - [x] T1.1 Replace the existing `pub mod key;` line with two new module declarations preserving alphabetical order: `pub mod key; pub mod migrations; pub mod schema;`. Update the file-level `//!` doc to note that `migrations` owns `PRAGMA user_version` discipline + the open/init entry point and `schema` owns the SQL DDL constants.
+  - [x] T1.2 Add a `pub enum CacheError` typed-error enum to `src/cache.rs` via `thiserror::Error`. Variants — exactly four in this story:
     - `Open { path: PathBuf, source: rusqlite::Error }` — `Connection::open` failure. Display: `"failed to open cache database '{path}': {source}"` (use `path.display()` in the format template, same pattern as `KeyError::ModelShaIo` at `src/cache/key.rs:65`).
     - `Pragma { source: rusqlite::Error }` — failure executing `PRAGMA journal_mode=WAL`, reading `PRAGMA user_version`, or writing it. Display: `"PRAGMA execution failed: {source}"`.
     - `MigrationFailed { version: u32, source: rusqlite::Error }` — `execute_batch(script)` or transaction commit failure for the migration that bumps `user_version` to `{version}`. Display: `"migration to schema version {version} failed: {source}"`.
     - `FutureSchema { found: u32, expected: u32 }` — `user_version` on disk exceeds `SCHEMA_VERSION`. Display: `"cache schema version {found} is newer than this lcrc build supports (this build is at v{expected}); upgrade lcrc to read this cache"`. The `"upgrade lcrc"` substring is the AC5 contract.
-  - [ ] T1.3 **Do not** add `From<CacheError> for crate::error::Error`. Same rule Story 1.5 (FingerprintError) and Story 1.6 (KeyError) followed: the boundary mapping decision (which `Error` variant — likely `Error::Preflight` for `Open` / `Pragma` / `MigrationFailed`, and a future-typed mapping for `FutureSchema`) belongs to the consumer story (Story 1.12). Pre-adding the `From` creates dead API surface and forces a mapping decision before the call site exists.
-  - [ ] T1.4 Apply `#[allow(clippy::module_name_repetitions)]` on `CacheError` with a `// CacheError is the public name reused across submodules; renaming it (e.g. to Error) collides with `crate::error::Error`.` comment. Same rationale Story 1.6 used at `src/cache/key.rs:58-60`.
+  - [x] T1.3 **Do not** add `From<CacheError> for crate::error::Error`. Same rule Story 1.5 (FingerprintError) and Story 1.6 (KeyError) followed: the boundary mapping decision (which `Error` variant — likely `Error::Preflight` for `Open` / `Pragma` / `MigrationFailed`, and a future-typed mapping for `FutureSchema`) belongs to the consumer story (Story 1.12). Pre-adding the `From` creates dead API surface and forces a mapping decision before the call site exists.
+  - [x] T1.4 Apply `#[allow(clippy::module_name_repetitions)]` on `CacheError` with a `// CacheError is the public name reused across submodules; renaming it (e.g. to Error) collides with `crate::error::Error`.` comment. Same rationale Story 1.6 used at `src/cache/key.rs:58-60`.
 
-- [ ] **T2. Author `src/cache/schema.rs` — SQL DDL constants** (AC: 2)
-  - [ ] T2.1 File-level `//!` doc: this module owns the SQL DDL strings; each schema version's CREATE statements are constants here. The migrations module composes them in order.
-  - [ ] T2.2 Define `pub const CELLS_DDL_V1: &str = "..."` containing the exact DDL from `_bmad-output/planning-artifacts/architecture.md` "Cell schema (`cells` table)" (line 254). The string must declare the table with `CREATE TABLE IF NOT EXISTS cells (...)`. Columns and PK below — match the architecture's column order, types, and nullability exactly:
+- [x] **T2. Author `src/cache/schema.rs` — SQL DDL constants** (AC: 2)
+  - [x] T2.1 File-level `//!` doc: this module owns the SQL DDL strings; each schema version's CREATE statements are constants here. The migrations module composes them in order.
+  - [x] T2.2 Define `pub const CELLS_DDL_V1: &str = "..."` containing the exact DDL from `_bmad-output/planning-artifacts/architecture.md` "Cell schema (`cells` table)" (line 254). The string must declare the table with `CREATE TABLE IF NOT EXISTS cells (...)`. Columns and PK below — match the architecture's column order, types, and nullability exactly:
 
     | Column | Type | NOT NULL? |
     |---|---|---|
@@ -72,16 +72,16 @@ so that cells can be persisted with the architecture-locked PK and the cache sur
     | `PRIMARY KEY` | `(machine_fingerprint, model_sha, backend_build, params_hash, task_id, harness_version, task_subset_version)` | — |
 
     Use `IF NOT EXISTS` so a re-run on an already-migrated DB is structurally safe (defence in depth — `apply_migrations` already gates by `user_version`, but this prevents a corrupt user_version from cascading into a `table already exists` error). `///` doc on the constant explains: "v1 cells table — see the architecture spec at `_bmad-output/planning-artifacts/architecture.md` § Cell schema. Keep column order identical to the spec for AC2 verifiability."
-  - [ ] T2.3 **Do not** add a separate `CREATE INDEX` constant for any non-PK lookups (e.g. `(model_sha, depth_tier)` for `lcrc show` filters). Indexes for read-side queries land in Story 1.8 (`cell.rs` / `query.rs`) once their access patterns are concrete; pre-indexing is API speculation and changes physical layout without a measured win.
-  - [ ] T2.4 **Do not** declare any other tables (`scans`, `runs`, `cells_history`, etc.). v1's schema is a single `cells` table per architecture line 252-282. Future tables land in their owner stories with their own migration scripts.
-  - [ ] T2.5 **Do not** parameterize the DDL with placeholders (e.g. table-name templating). The string is a constant SQL literal; future migrations are appended as additional `pub const CELLS_DDL_V2: &str = "ALTER TABLE cells ADD COLUMN ...;"` — see § "Resolved decisions" below.
+  - [x] T2.3 **Do not** add a separate `CREATE INDEX` constant for any non-PK lookups (e.g. `(model_sha, depth_tier)` for `lcrc show` filters). Indexes for read-side queries land in Story 1.8 (`cell.rs` / `query.rs`) once their access patterns are concrete; pre-indexing is API speculation and changes physical layout without a measured win.
+  - [x] T2.4 **Do not** declare any other tables (`scans`, `runs`, `cells_history`, etc.). v1's schema is a single `cells` table per architecture line 252-282. Future tables land in their owner stories with their own migration scripts.
+  - [x] T2.5 **Do not** parameterize the DDL with placeholders (e.g. table-name templating). The string is a constant SQL literal; future migrations are appended as additional `pub const CELLS_DDL_V2: &str = "ALTER TABLE cells ADD COLUMN ...;"` — see § "Resolved decisions" below.
 
-- [ ] **T3. Author `src/cache/migrations.rs` — open/init + migration framework** (AC: 1, 3, 4, 5)
-  - [ ] T3.1 File-level `//!` doc: this module owns `PRAGMA user_version` discipline. `open(path)` is the consumer-facing entry point; it opens (or creates) the file, enables WAL journal mode, and applies any pending migrations transactionally. NFR-R3 (cache durable across patch upgrades) is the binding requirement.
-  - [ ] T3.2 Imports: `use std::path::{Path, PathBuf};`, `use rusqlite::Connection;`, `use crate::cache::CacheError;`, `use crate::cache::schema::CELLS_DDL_V1;`. Do not `use rusqlite::*` glob — the locked patterns reject globbing.
-  - [ ] T3.3 Declare the migration table — `const MIGRATIONS: &[&str] = &[CELLS_DDL_V1];`. Index `[N]` is "the migration that brings `user_version` from `N` to `N+1`". Adding a v2 migration in a future story appends `CELLS_DDL_V2` to this slice; `SCHEMA_VERSION` updates automatically because it is derived from `MIGRATIONS.len()`.
-  - [ ] T3.4 Declare the schema-version pin — `pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;`. Use `#[allow(clippy::cast_possible_truncation)]` with a `// MIGRATIONS.len() is bounded by hand-edits to a const slice; truncation is structurally impossible.` comment. `<[T]>::len()` is `const` since Rust 1.55, well below MSRV 1.95 (Cargo.toml line 5). `///` doc: "The schema version this lcrc build supports. Equal to `MIGRATIONS.len()`. Used by `Cache::open` to decide whether to migrate, no-op, or refuse a future-schema cache."
-  - [ ] T3.5 Implement `pub fn open(path: &Path) -> Result<Connection, CacheError>`:
+- [x] **T3. Author `src/cache/migrations.rs` — open/init + migration framework** (AC: 1, 3, 4, 5)
+  - [x] T3.1 File-level `//!` doc: this module owns `PRAGMA user_version` discipline. `open(path)` is the consumer-facing entry point; it opens (or creates) the file, enables WAL journal mode, and applies any pending migrations transactionally. NFR-R3 (cache durable across patch upgrades) is the binding requirement.
+  - [x] T3.2 Imports: `use std::path::{Path, PathBuf};`, `use rusqlite::Connection;`, `use crate::cache::CacheError;`, `use crate::cache::schema::CELLS_DDL_V1;`. Do not `use rusqlite::*` glob — the locked patterns reject globbing.
+  - [x] T3.3 Declare the migration table — `const MIGRATIONS: &[&str] = &[CELLS_DDL_V1];`. Index `[N]` is "the migration that brings `user_version` from `N` to `N+1`". Adding a v2 migration in a future story appends `CELLS_DDL_V2` to this slice; `SCHEMA_VERSION` updates automatically because it is derived from `MIGRATIONS.len()`.
+  - [x] T3.4 Declare the schema-version pin — `pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;`. Use `#[allow(clippy::cast_possible_truncation)]` with a `// MIGRATIONS.len() is bounded by hand-edits to a const slice; truncation is structurally impossible.` comment. `<[T]>::len()` is `const` since Rust 1.55, well below MSRV 1.95 (Cargo.toml line 5). `///` doc: "The schema version this lcrc build supports. Equal to `MIGRATIONS.len()`. Used by `Cache::open` to decide whether to migrate, no-op, or refuse a future-schema cache."
+  - [x] T3.5 Implement `pub fn open(path: &Path) -> Result<Connection, CacheError>`:
     ```rust
     let mut conn = Connection::open(path).map_err(|source| CacheError::Open {
         path: path.to_path_buf(),
@@ -94,7 +94,7 @@ so that cells can be persisted with the architecture-locked PK and the cache sur
     - **Synchronous on purpose.** `rusqlite` is the locked SQLite binding (Cargo.toml line 45) and is sync; the architecture's pattern (architecture.md line 697) wraps sync rusqlite calls in `tokio::task::spawn_blocking` at the *consumer* layer (Story 1.8 / 1.12), not at the primitive. Story 1.7 must NOT introduce `async`, NOT take a tokio runtime dependency, NOT bridge sync/async internally.
     - **Caller owns parent-directory creation.** `Connection::open(path)` creates the file but does NOT `mkdir -p` its parent. A `///` doc note must say: "The caller is responsible for ensuring `path.parent()` exists (Story 1.12 wires `tokio::fs::create_dir_all` at the CLI layer). Calling `open` against a path whose parent directory is missing returns `Err(CacheError::Open { source: ... })`." This keeps the function free of `std::fs` calls (AR-3).
     - `///` doc `# Errors` section: `CacheError::Open` (file open failure), `CacheError::Pragma` (WAL or user_version PRAGMA failure), `CacheError::MigrationFailed` (DDL execution or transaction commit failure), `CacheError::FutureSchema` (`user_version > SCHEMA_VERSION`).
-  - [ ] T3.6 Implement private helper `fn enable_wal(conn: &Connection) -> Result<(), CacheError>`:
+  - [x] T3.6 Implement private helper `fn enable_wal(conn: &Connection) -> Result<(), CacheError>`:
     ```rust
     let mode: String = conn
         .query_row("PRAGMA journal_mode = WAL;", [], |row| row.get(0))
@@ -106,7 +106,7 @@ so that cells can be persisted with the architecture-locked PK and the cache sur
     ```
     - SQLite's `PRAGMA journal_mode = WAL;` returns the *now-active* journal mode as a single-column row. On file-backed DBs this is always `"wal"` (lowercase); on `:memory:` and read-only paths it falls back to `"memory"` / `"delete"`. We accept `"wal"` only.
     - The `Pragma { source: ExecuteReturnedResults }` synthetic error is the closest pre-existing `rusqlite::Error` variant for "WAL was not enabled despite the PRAGMA returning a row" — it preserves the typed-error chain without inventing a new variant. Future maintenance can introduce a more specific `CacheError::WalNotEnabled` if a real call site needs to distinguish; YAGNI for v1.
-  - [ ] T3.7 Implement private helper `fn apply_migrations(conn: &mut Connection) -> Result<(), CacheError>`:
+  - [x] T3.7 Implement private helper `fn apply_migrations(conn: &mut Connection) -> Result<(), CacheError>`:
     ```rust
     let current = read_user_version(conn)?;
     if current > SCHEMA_VERSION {
@@ -127,23 +127,23 @@ so that cells can be persisted with the architecture-locked PK and the cache sur
     ```
     - **Atomic per migration step**: `BEGIN; <DDL>; PRAGMA user_version = <target>; COMMIT;`. SQLite supports transactional DDL (CREATE TABLE inside a transaction commits or rolls back atomically), and `user_version` is stored in the database header which is itself transactional. A crash between `execute_batch(script)` and `execute_batch(PRAGMA user_version)` rolls back, leaving the cache at the prior `user_version` and prior schema — never partial.
     - **`PRAGMA user_version = N` cannot be parameterized.** SQLite refuses bound parameters in PRAGMA values; the only path is to format the integer into the SQL literal. `target` is a `u32` we own, not user input — no SQL injection vector.
-  - [ ] T3.8 Implement private helper `fn read_user_version(conn: &Connection) -> Result<u32, CacheError>`:
+  - [x] T3.8 Implement private helper `fn read_user_version(conn: &Connection) -> Result<u32, CacheError>`:
     ```rust
     conn.query_row("PRAGMA user_version;", [], |row| row.get::<_, u32>(0))
         .map_err(|source| CacheError::Pragma { source })
     ```
     Use `query_row` (not `pragma_query_value`) to keep the API surface narrow — `query_row` is the universal rusqlite read pattern and reads as one line.
-  - [ ] T3.9 **Do not** set `PRAGMA synchronous = NORMAL` (or `FULL` / `OFF`) in this story. WAL mode + the SQLite default `synchronous` setting is correct for v1; a tuning pass belongs in Epic 6 (config & polish) or as a `bmad-quick-dev` follow-up if profiling flags it.
-  - [ ] T3.10 **Do not** set `PRAGMA foreign_keys = ON` in this story. The v1 schema is a single table with no foreign-key relationships.
-  - [ ] T3.11 **Do not** add a `pub fn close(conn: Connection)` or similar lifecycle helper. `Connection` is RAII-dropped by rusqlite; the test surface and Story 1.8's consumer use the standard drop pattern.
+  - [x] T3.9 **Do not** set `PRAGMA synchronous = NORMAL` (or `FULL` / `OFF`) in this story. WAL mode + the SQLite default `synchronous` setting is correct for v1; a tuning pass belongs in Epic 6 (config & polish) or as a `bmad-quick-dev` follow-up if profiling flags it.
+  - [x] T3.10 **Do not** set `PRAGMA foreign_keys = ON` in this story. The v1 schema is a single table with no foreign-key relationships.
+  - [x] T3.11 **Do not** add a `pub fn close(conn: Connection)` or similar lifecycle helper. `Connection` is RAII-dropped by rusqlite; the test surface and Story 1.8's consumer use the standard drop pattern.
 
-- [ ] **T4. In-module unit tests in `src/cache/migrations.rs`** (AC: 1, 4, 5)
-  - [ ] T4.1 Standard test-module attribute set: `#[cfg(test)] #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] mod tests { ... }` (matches Stories 1.3 / 1.4 / 1.5 / 1.6 pattern). Tests use `Connection::open_in_memory()` for the migration-logic tests because in-memory SQLite is faster, deterministic, and exercises the same `apply_migrations` code path as file-backed DBs (the only difference is WAL mode, which `:memory:` falls back to `"memory"` — exercised separately by the file-backed integration tests in T5).
-  - [ ] T4.2 `apply_migrations_on_empty_db_bumps_user_version_to_schema_version` — open in-memory DB, call `apply_migrations(&mut conn)?`, assert `read_user_version(&conn)? == SCHEMA_VERSION`. Verifies AC4 fundamentals (the only `N → N+1` step in v1 is `0 → 1`).
-  - [ ] T4.3 `apply_migrations_idempotent_when_user_version_equals_schema_version` — open in-memory DB, call `apply_migrations` twice; both calls succeed; `user_version` stays at `SCHEMA_VERSION`. Verifies AC3 idempotency at the unit level.
-  - [ ] T4.4 `apply_migrations_returns_future_schema_when_user_version_above_schema_version` — open in-memory DB, manually set `user_version = SCHEMA_VERSION + 7` via `conn.execute_batch("PRAGMA user_version = ...;")?`, call `apply_migrations`, assert `Err(CacheError::FutureSchema { found: SCHEMA_VERSION + 7, expected: SCHEMA_VERSION })`. Verifies AC5 at the unit level.
-  - [ ] T4.5 `future_schema_display_locks_upgrade_lcrc_substring` — construct `CacheError::FutureSchema { found: 99, expected: 1 }`; assert `.to_string().contains("upgrade lcrc")`. AC5 Display contract pin (same Display-substring lesson as Story 1.5 § AC3 and Story 1.6 § ModelShaIo Display).
-  - [ ] T4.6 `cells_table_columns_match_architecture_spec` — open in-memory DB, `apply_migrations`, then `conn.prepare("PRAGMA table_info(cells);")`, iterate rows, collect `(name, type, notnull)` tuples, assert against the expected vector below. AC2's column-by-column verification at the unit level.
+- [x] **T4. In-module unit tests in `src/cache/migrations.rs`** (AC: 1, 4, 5)
+  - [x] T4.1 Standard test-module attribute set: `#[cfg(test)] #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] mod tests { ... }` (matches Stories 1.3 / 1.4 / 1.5 / 1.6 pattern). Tests use `Connection::open_in_memory()` for the migration-logic tests because in-memory SQLite is faster, deterministic, and exercises the same `apply_migrations` code path as file-backed DBs (the only difference is WAL mode, which `:memory:` falls back to `"memory"` — exercised separately by the file-backed integration tests in T5).
+  - [x] T4.2 `apply_migrations_on_empty_db_bumps_user_version_to_schema_version` — open in-memory DB, call `apply_migrations(&mut conn)?`, assert `read_user_version(&conn)? == SCHEMA_VERSION`. Verifies AC4 fundamentals (the only `N → N+1` step in v1 is `0 → 1`).
+  - [x] T4.3 `apply_migrations_idempotent_when_user_version_equals_schema_version` — open in-memory DB, call `apply_migrations` twice; both calls succeed; `user_version` stays at `SCHEMA_VERSION`. Verifies AC3 idempotency at the unit level.
+  - [x] T4.4 `apply_migrations_returns_future_schema_when_user_version_above_schema_version` — open in-memory DB, manually set `user_version = SCHEMA_VERSION + 7` via `conn.execute_batch("PRAGMA user_version = ...;")?`, call `apply_migrations`, assert `Err(CacheError::FutureSchema { found: SCHEMA_VERSION + 7, expected: SCHEMA_VERSION })`. Verifies AC5 at the unit level.
+  - [x] T4.5 `future_schema_display_locks_upgrade_lcrc_substring` — construct `CacheError::FutureSchema { found: 99, expected: 1 }`; assert `.to_string().contains("upgrade lcrc")`. AC5 Display contract pin (same Display-substring lesson as Story 1.5 § AC3 and Story 1.6 § ModelShaIo Display).
+  - [x] T4.6 `cells_table_columns_match_architecture_spec` — open in-memory DB, `apply_migrations`, then `conn.prepare("PRAGMA table_info(cells);")`, iterate rows, collect `(name, type, notnull)` tuples, assert against the expected vector below. AC2's column-by-column verification at the unit level.
     - Expected (in PRAGMA table_info row order, which is column declaration order — SQLite guarantees this):
       ```
       ("machine_fingerprint",  "TEXT",    true),
@@ -166,32 +166,32 @@ so that cells can be persisted with the architecture-locked PK and the cache sur
       ("thermal_state",        "TEXT",    false),
       ("badges",               "TEXT",    false),
       ```
-  - [ ] T4.7 `cells_table_primary_key_is_seven_dimension` — `PRAGMA table_info(cells);` includes a `pk` column with values `0` (not in PK) or `1, 2, 3, ...` (PK position). Assert exactly seven columns have `pk > 0` and that their (name, pk-position) pairs match `[("machine_fingerprint", 1), ("model_sha", 2), ("backend_build", 3), ("params_hash", 4), ("task_id", 5), ("harness_version", 6), ("task_subset_version", 7)]`. AC2's PK-shape verification.
-  - [ ] T4.8 `schema_version_equals_migrations_len` — assert `SCHEMA_VERSION as usize == MIGRATIONS.len()`. Cheap structural test; guards against a future maintainer typo'ing `SCHEMA_VERSION` away from the derived definition.
-  - [ ] T4.9 **Do not** add a benchmark or perf test. NFR-P5 (cache lookup <100 ms for 10K cells) is verified by Story 1.8's `tests/cache_roundtrip.rs`, not by this story.
+  - [x] T4.7 `cells_table_primary_key_is_seven_dimension` — `PRAGMA table_info(cells);` includes a `pk` column with values `0` (not in PK) or `1, 2, 3, ...` (PK position). Assert exactly seven columns have `pk > 0` and that their (name, pk-position) pairs match `[("machine_fingerprint", 1), ("model_sha", 2), ("backend_build", 3), ("params_hash", 4), ("task_id", 5), ("harness_version", 6), ("task_subset_version", 7)]`. AC2's PK-shape verification.
+  - [x] T4.8 `schema_version_equals_migrations_len` — assert `SCHEMA_VERSION as usize == MIGRATIONS.len()`. Cheap structural test; guards against a future maintainer typo'ing `SCHEMA_VERSION` away from the derived definition.
+  - [x] T4.9 **Do not** add a benchmark or perf test. NFR-P5 (cache lookup <100 ms for 10K cells) is verified by Story 1.8's `tests/cache_roundtrip.rs`, not by this story.
 
-- [ ] **T5. Author `tests/cache_migrations.rs` — integration tests for the public API** (AC: 1, 2, 3, 5)
-  - [ ] T5.1 New file `tests/cache_migrations.rs`. Standard integration-test crate (separate compilation unit; sees `lcrc::*` only via the public API, no `pub(crate)` access). Standard exemption attribute: `#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` at file top (matches `tests/cli_exit_codes.rs`, `tests/cli_help_version.rs`, `tests/machine_fingerprint.rs`). Plain `#[test]` (not `#[tokio::test]` — `migrations::open` is sync).
-  - [ ] T5.2 `creates_db_file_on_first_open` — uses `tempfile::TempDir::new()?` as the parent dir; `let path = dir.path().join("lcrc.db");` (parent already exists, satisfies the doc-noted contract); `assert!(!path.exists());` before; `let _conn = lcrc::cache::migrations::open(&path)?;`; `assert!(path.exists());` after. AC1's "creates the database file" half.
-  - [ ] T5.3 `enables_wal_journal_mode` — open the DB, then `let mode: String = conn.query_row("PRAGMA journal_mode;", [], |row| row.get(0))?;`; `assert_eq!(mode.to_lowercase(), "wal");`. AC1's "with WAL mode enabled" half.
-  - [ ] T5.4 `cells_table_matches_architecture_spec_via_public_api` — same column/PK assertions as T4.6 + T4.7, but reached through the public `lcrc::cache::migrations::open` entry point instead of the in-module `apply_migrations`. AC2's end-to-end verification.
-  - [ ] T5.5 `reopen_after_first_migration_is_no_op_NFR_R3` — open the DB once, drop the connection (`drop(conn)` or scope-exit), then reopen the same path; assert the second open returns `Ok(_)`; assert `user_version` is still `SCHEMA_VERSION`; assert the `cells` table still exists with the same column count. AC3's NFR-R3 patch durability check. The two-open flow in a single test simulates "lcrc 0.1.0 wrote, then lcrc 0.1.1 read" — both opens use the same `SCHEMA_VERSION` constant because both are this lcrc build, so the second open's `apply_migrations` loop runs zero iterations (the AC3 invariant).
-  - [ ] T5.6 `future_schema_version_returns_future_schema_error` — open the DB, set `user_version` to `SCHEMA_VERSION + 1` via raw `conn.execute_batch("PRAGMA user_version = ...;")?`, drop the connection, reopen — assert `Err(lcrc::cache::CacheError::FutureSchema { found, expected })` with `found == SCHEMA_VERSION + 1` and `expected == SCHEMA_VERSION`. AC5's end-to-end verification at the public API.
-  - [ ] T5.7 `future_schema_error_display_contains_upgrade_lcrc_advice` — same construction as T5.6 but assert `format!("{err}").contains("upgrade lcrc")`. AC5's user-visible message contract.
-  - [ ] T5.8 **Do not** spawn the `lcrc` binary in this test (no `assert_cmd::Command::cargo_bin("lcrc")`). The CLI wiring of the cache lives in Story 1.12; testing it here would conflate this story's primitive surface with the integration surface. The exit-code half of AC5 is owed by Story 1.12.
-  - [ ] T5.9 **Do not** add an `assert!(path.parent().unwrap().exists())` boilerplate check in T5.2/T5.3. `TempDir::new` guarantees the parent exists; the test's contract is "given a valid parent dir, open creates the file". The "missing parent dir → CacheError::Open" path is library-contract-only and not in the AC set.
+- [x] **T5. Author `tests/cache_migrations.rs` — integration tests for the public API** (AC: 1, 2, 3, 5)
+  - [x] T5.1 New file `tests/cache_migrations.rs`. Standard integration-test crate (separate compilation unit; sees `lcrc::*` only via the public API, no `pub(crate)` access). Standard exemption attribute: `#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` at file top (matches `tests/cli_exit_codes.rs`, `tests/cli_help_version.rs`, `tests/machine_fingerprint.rs`). Plain `#[test]` (not `#[tokio::test]` — `migrations::open` is sync).
+  - [x] T5.2 `creates_db_file_on_first_open` — uses `tempfile::TempDir::new()?` as the parent dir; `let path = dir.path().join("lcrc.db");` (parent already exists, satisfies the doc-noted contract); `assert!(!path.exists());` before; `let _conn = lcrc::cache::migrations::open(&path)?;`; `assert!(path.exists());` after. AC1's "creates the database file" half.
+  - [x] T5.3 `enables_wal_journal_mode` — open the DB, then `let mode: String = conn.query_row("PRAGMA journal_mode;", [], |row| row.get(0))?;`; `assert_eq!(mode.to_lowercase(), "wal");`. AC1's "with WAL mode enabled" half.
+  - [x] T5.4 `cells_table_matches_architecture_spec_via_public_api` — same column/PK assertions as T4.6 + T4.7, but reached through the public `lcrc::cache::migrations::open` entry point instead of the in-module `apply_migrations`. AC2's end-to-end verification.
+  - [x] T5.5 `reopen_after_first_migration_is_no_op_NFR_R3` — open the DB once, drop the connection (`drop(conn)` or scope-exit), then reopen the same path; assert the second open returns `Ok(_)`; assert `user_version` is still `SCHEMA_VERSION`; assert the `cells` table still exists with the same column count. AC3's NFR-R3 patch durability check. The two-open flow in a single test simulates "lcrc 0.1.0 wrote, then lcrc 0.1.1 read" — both opens use the same `SCHEMA_VERSION` constant because both are this lcrc build, so the second open's `apply_migrations` loop runs zero iterations (the AC3 invariant).
+  - [x] T5.6 `future_schema_version_returns_future_schema_error` — open the DB, set `user_version` to `SCHEMA_VERSION + 1` via raw `conn.execute_batch("PRAGMA user_version = ...;")?`, drop the connection, reopen — assert `Err(lcrc::cache::CacheError::FutureSchema { found, expected })` with `found == SCHEMA_VERSION + 1` and `expected == SCHEMA_VERSION`. AC5's end-to-end verification at the public API.
+  - [x] T5.7 `future_schema_error_display_contains_upgrade_lcrc_advice` — same construction as T5.6 but assert `format!("{err}").contains("upgrade lcrc")`. AC5's user-visible message contract.
+  - [x] T5.8 **Do not** spawn the `lcrc` binary in this test (no `assert_cmd::Command::cargo_bin("lcrc")`). The CLI wiring of the cache lives in Story 1.12; testing it here would conflate this story's primitive surface with the integration surface. The exit-code half of AC5 is owed by Story 1.12.
+  - [x] T5.9 **Do not** add an `assert!(path.parent().unwrap().exists())` boilerplate check in T5.2/T5.3. `TempDir::new` guarantees the parent exists; the test's contract is "given a valid parent dir, open creates the file". The "missing parent dir → CacheError::Open" path is library-contract-only and not in the AC set.
 
-- [ ] **T6. Local CI mirror** (AC: 1, 2, 3, 4, 5)
-  - [ ] T6.1 Run `cargo build` — confirms the module compiles. No new dep adds; `Cargo.lock` should be unchanged (rusqlite, tempfile, thiserror are all already locked). If `Cargo.lock` does change, investigate before pushing — that signals an unintended dep introduction.
-  - [ ] T6.2 Run `cargo fmt` — apply rustfmt; commit any reformatted lines.
-  - [ ] T6.3 Run `cargo clippy --all-targets --all-features -- -D warnings` locally. Specifically watch for:
+- [x] **T6. Local CI mirror** (AC: 1, 2, 3, 4, 5)
+  - [x] T6.1 Run `cargo build` — confirms the module compiles. No new dep adds; `Cargo.lock` should be unchanged (rusqlite, tempfile, thiserror are all already locked). If `Cargo.lock` does change, investigate before pushing — that signals an unintended dep introduction.
+  - [x] T6.2 Run `cargo fmt` — apply rustfmt; commit any reformatted lines.
+  - [x] T6.3 Run `cargo clippy --all-targets --all-features -- -D warnings` locally. Specifically watch for:
     - `clippy::cast_possible_truncation` on `MIGRATIONS.len() as u32` — suppress with the documented `#[allow]` + comment per T3.4.
     - `clippy::module_name_repetitions` on `CacheError` — suppress per T1.4.
     - `clippy::missing_errors_doc` on `pub fn open` — `# Errors` rustdoc section per T3.5.
     - `clippy::missing_docs` on every `pub` item (`open`, `SCHEMA_VERSION`, `CacheError`, every variant + field, `CELLS_DDL_V1`).
     - `clippy::needless_pass_by_value` should NOT fire — all helper params are `&Connection` / `&mut Connection`.
-  - [ ] T6.4 Run `cargo test` — confirms all in-module tests in `src/cache/migrations.rs::tests` pass AND the new `tests/cache_migrations.rs` integration tests pass AND every existing test in the suite (`tests/cli_exit_codes.rs`, `tests/cli_help_version.rs`, `tests/machine_fingerprint.rs`, plus the in-module suites for `cache::key`, `error`, `exit_code`, `machine`, `output`, `version`, etc.) still passes.
-  - [ ] T6.5 Manual scope-discipline grep: `git grep -nE 'rusqlite::|PRAGMA|user_version' src/ tests/ | grep -v '^src/cache/migrations.rs:' | grep -v '^src/cache/schema.rs:' | grep -v '^src/cache.rs:' | grep -v '^tests/cache_migrations.rs:'`. Must produce zero matches — the rusqlite + PRAGMA surface is contained inside the new modules. Same single-source-of-truth grep contract Story 1.6 used for `model_sha|params_hash|backend_build`.
+  - [x] T6.4 Run `cargo test` — confirms all in-module tests in `src/cache/migrations.rs::tests` pass AND the new `tests/cache_migrations.rs` integration tests pass AND every existing test in the suite (`tests/cli_exit_codes.rs`, `tests/cli_help_version.rs`, `tests/machine_fingerprint.rs`, plus the in-module suites for `cache::key`, `error`, `exit_code`, `machine`, `output`, `version`, etc.) still passes.
+  - [x] T6.5 Manual scope-discipline grep: `git grep -nE 'rusqlite::|PRAGMA|user_version' src/ tests/ | grep -v '^src/cache/migrations.rs:' | grep -v '^src/cache/schema.rs:' | grep -v '^src/cache.rs:' | grep -v '^tests/cache_migrations.rs:'`. Must produce zero matches — the rusqlite + PRAGMA surface is contained inside the new modules. Same single-source-of-truth grep contract Story 1.6 used for `model_sha|params_hash|backend_build`.
 
 ## Dev Notes
 
@@ -482,10 +482,34 @@ No conflicts detected between this story's plan and the existing codebase or pla
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-opus-4-7 (1M context) via bmad-dev-story workflow
 
 ### Debug Log References
 
+- `cargo build` → finished in 2.90 s; `Cargo.lock` unchanged (no new direct deps; `rusqlite`, `tempfile`, `thiserror` already locked).
+- `cargo fmt` → reformatted method-chain indentation in `src/cache/migrations.rs::apply_migrations` (per-step `tx.execute_batch(...).map_err(...)` blocks expanded onto multi-line) and inlined the `super::{...}` use-list in the test module.
+- `cargo clippy --all-targets --all-features -- -D warnings` → first pass surfaced six `clippy::doc_markdown` violations on bare "SQLite" in module/function docs (`src/cache.rs:22`, `src/cache/migrations.rs:5`, `:11`, `:42`, `:53`, `:70`) plus one in `tests/cache_migrations.rs:4` ("FutureSchema"); fixed by backticking each occurrence. Second pass: clean.
+- `cargo test` → 78 tests passing across 7 suites in 1.20 s (lib + main unittests + 4 integration tests including the new `cache_migrations`).
+- T6.5 grep `git grep -nE 'rusqlite::|PRAGMA|user_version' src/ tests/` outside the cache modules → zero matches; single-source-of-truth contract upheld.
+
 ### Completion Notes List
 
+- `src/cache.rs` extended additively: kept the existing `pub mod key;`, added `pub mod migrations;` + `pub mod schema;` in alphabetical order, added the `pub enum CacheError` with four variants (`Open`, `Pragma`, `MigrationFailed`, `FutureSchema`) per T1.2; no `From<CacheError> for crate::error::Error` impl (deferred to Story 1.12).
+- `src/cache/schema.rs` hosts `pub const CELLS_DDL_V1` exactly mirroring the architecture spec at `_bmad-output/planning-artifacts/architecture.md` § Cell schema (lines 252–282): 7-dimension PK + 12 metadata columns; nullability matches the spec; `IF NOT EXISTS` per T2.2.
+- `src/cache/migrations.rs` hosts the migration framework: `MIGRATIONS: &[&str]` slice indexed by from-version, derived `pub const SCHEMA_VERSION = MIGRATIONS.len() as u32`, `pub fn open(path)` synchronous entry point, plus three private helpers (`enable_wal`, `apply_migrations`, `read_user_version`). Each migration step runs in its own `BEGIN; <DDL>; PRAGMA user_version = N; COMMIT;` transaction for atomicity (T3.7).
+- In-module unit tests (T4.2 → T4.8) cover empty-DB → `SCHEMA_VERSION` bump, idempotency on re-run, `FutureSchema` on `user_version > SCHEMA_VERSION`, `Display` substring pin (`"upgrade lcrc"`), full 19-column `cells` schema verification, 7-dimension PK shape, and the `SCHEMA_VERSION == MIGRATIONS.len()` structural pin.
+- Integration tests in `tests/cache_migrations.rs` (T5.2 → T5.7) verify the public API end-to-end via `lcrc::cache::migrations::open`: file creation, WAL mode on a real file, `cells` table column + PK matrix, NFR-R3 reopen-no-op, and the `FutureSchema` error + `Display` substring at the public boundary.
+- Local CI mirror (T6) all green: `cargo build` clean, `cargo fmt` applied, `cargo clippy --all-targets --all-features -- -D warnings` clean, `cargo test` 78/78 passing, single-source-of-truth grep zero leakage. `Cargo.lock` unchanged.
+
 ### File List
+
+- `src/cache.rs` — UPDATED: extended to declare `pub mod migrations;` + `pub mod schema;` and host `pub enum CacheError` with four variants.
+- `src/cache/schema.rs` — NEW: `pub const CELLS_DDL_V1: &str` matching the architecture spec.
+- `src/cache/migrations.rs` — NEW: `MIGRATIONS` slice, `pub const SCHEMA_VERSION`, `pub fn open`, `enable_wal` / `apply_migrations` / `read_user_version` helpers, plus in-module unit tests.
+- `tests/cache_migrations.rs` — NEW: integration tests for AC1 / AC2 / AC3 / AC5 via the public `lcrc::cache::migrations::open` API.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — UPDATED: `1-7-sqlite-schema-migrations-framework` transitioned `ready-for-dev → in-progress → review`; `last_updated` bumped.
+- `_bmad-output/implementation-artifacts/1-7-sqlite-schema-migrations-framework.md` — UPDATED: task checkboxes marked complete, Status transitioned to `review`, Dev Agent Record and File List populated, Change Log appended.
+
+## Change Log
+
+- 2026-05-07: Story 1.7 implementation complete (claude-opus-4-7 via bmad-dev-story). Added `src/cache/schema.rs` (`CELLS_DDL_V1`), `src/cache/migrations.rs` (`MIGRATIONS`, `SCHEMA_VERSION`, `open`, `enable_wal`, `apply_migrations`, `read_user_version` + 7 in-module tests), and `tests/cache_migrations.rs` (6 integration tests). Extended `src/cache.rs` with `pub mod migrations;` + `pub mod schema;` declarations and the `pub enum CacheError { Open, Pragma, MigrationFailed, FutureSchema }`. All 78 tests pass; `cargo clippy --all-targets --all-features -- -D warnings` clean; T6.5 single-source-of-truth grep clean; `Cargo.lock` unchanged. Status: `ready-for-dev → in-progress → review`.
