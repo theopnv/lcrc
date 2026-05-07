@@ -25,10 +25,7 @@ pub fn run() -> Result<(), crate::error::Error> {
                 crate::output::diag("`lcrc scan` is not yet implemented in this build.");
                 Ok(())
             }
-            Err(err) => {
-                crate::output::diag(&err.to_string());
-                Err(crate::error::Error::Preflight(err.to_string()))
-            }
+            Err(err) => Err(crate::error::Error::Preflight(err.to_string())),
         }
     })
 }
