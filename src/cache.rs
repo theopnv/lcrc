@@ -1,5 +1,10 @@
-//! Cache module root. Three submodules split the cache concerns:
+//! Cache module root. Four submodules split the cache concerns:
 //!
+//! - [`cell`] owns the public [`Cache`](crate::cache::cell::Cache) wrapper
+//!   around an open `SQLite` `Connection`, the
+//!   [`Cell`](crate::cache::cell::Cell) and
+//!   [`CellKey`](crate::cache::cell::CellKey) value types, and the atomic
+//!   single-cell `write_cell` / `lookup_cell` primitives.
 //! - [`key`] owns canonical derivation of the four cache-key components
 //!   (`model_sha`, `params_hash`, `machine_fingerprint`, `backend_build`).
 //! - [`schema`] owns the SQL DDL string constants for each schema version.
@@ -9,12 +14,13 @@
 //!
 //! Errors raised by SQLite-touching submodules surface as the shared
 //! [`CacheError`] enum defined here at the module root, so future submodules
-//! (`cell`, `query`) can grow new variants without `From` ladders.
+//! (`query`) can grow new variants without `From` ladders.
 
 use std::path::PathBuf;
 
 use thiserror::Error;
 
+pub mod cell;
 pub mod key;
 pub mod migrations;
 pub mod schema;
@@ -72,5 +78,38 @@ pub enum CacheError {
         found: u32,
         /// Highest schema version this lcrc build knows how to apply.
         expected: u32,
+    },
+
+    /// `INSERT` failed because the seven-dimension composite primary key is
+    /// already present in the `cells` table. Carries the colliding
+    /// [`CellKey`](crate::cache::cell::CellKey) so the Display message is
+    /// fully self-describing without having to dump the source error chain.
+    ///
+    /// The cache layer surfaces this loudly rather than performing an
+    /// `UPSERT`: the lookup-before-measure invariant plus the single-writer
+    /// scan lock guarantee that a same-PK write at this layer indicates an
+    /// upstream caller bug.
+    #[error(
+        "cache already contains a cell with this primary key \
+         (machine_fingerprint={machine_fingerprint}, model_sha={model_sha}, \
+         backend_build={backend_build}, params_hash={params_hash}, \
+         task_id={task_id}, harness_version={harness_version}, \
+         task_subset_version={task_subset_version})",
+        machine_fingerprint = key.machine_fingerprint,
+        model_sha = key.model_sha,
+        backend_build = key.backend_build,
+        params_hash = key.params_hash,
+        task_id = key.task_id,
+        harness_version = key.harness_version,
+        task_subset_version = key.task_subset_version,
+    )]
+    DuplicateCell {
+        /// Composite primary key whose `INSERT` collided with an existing row.
+        ///
+        /// Boxed because [`crate::cache::cell::CellKey`] is 168 bytes (seven
+        /// owned `String`s). Inlining it would push the enum past clippy's
+        /// 128-byte `result_large_err` budget and cascade onto every other
+        /// `Result<_, CacheError>` in the cache module.
+        key: Box<crate::cache::cell::CellKey>,
     },
 }
