@@ -1,6 +1,6 @@
 # Story 1.7: SQLite schema + migrations framework
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -513,3 +513,14 @@ claude-opus-4-7 (1M context) via bmad-dev-story workflow
 ## Change Log
 
 - 2026-05-07: Story 1.7 implementation complete (claude-opus-4-7 via bmad-dev-story). Added `src/cache/schema.rs` (`CELLS_DDL_V1`), `src/cache/migrations.rs` (`MIGRATIONS`, `SCHEMA_VERSION`, `open`, `enable_wal`, `apply_migrations`, `read_user_version` + 7 in-module tests), and `tests/cache_migrations.rs` (6 integration tests). Extended `src/cache.rs` with `pub mod migrations;` + `pub mod schema;` declarations and the `pub enum CacheError { Open, Pragma, MigrationFailed, FutureSchema }`. All 78 tests pass; `cargo clippy --all-targets --all-features -- -D warnings` clean; T6.5 single-source-of-truth grep clean; `Cargo.lock` unchanged. Status: `ready-for-dev → in-progress → review`.
+- 2026-05-07: Code review pass (claude-opus-4-7 via bmad-code-review). Acceptance Auditor: zero violations against AC1–AC5, all "Resolved decisions" / "Anti-patterns to avoid" / architecture-compliance bullets confirmed in code. Adversarial layers (Blind Hunter + Edge Case Hunter): 2 patches applied inline, 1 item deferred to `deferred-work.md`, 3 nits noted in Review Findings, ~38 findings dismissed (most rejected pre-PRAGMA tuning, secondary indexes, STRICT tables, etc., that the spec explicitly forbids; remainder were truncated-diff false positives). All 78 tests still pass; clippy clean. Status: `review → done`.
+
+### Review Findings
+
+- [x] [Review][Patch] `open()` mutated `journal_mode` (creating `-wal` / `-shm` sidecars) before checking `user_version`, weakening the AC5 "refuse a future-schema cache without touching the file" intent. Fix: hoist a `read_user_version` + early `FutureSchema` return ahead of `enable_wal`. [`src/cache/migrations.rs:60-78`]
+- [x] [Review][Patch] WAL mode comparison was inconsistent between source and integration test (`eq_ignore_ascii_case` in `enable_wal`, `to_lowercase()` in `enables_wal_journal_mode`). Aligned the test on `eq_ignore_ascii_case` (no allocation, matches source). [`tests/cache_migrations.rs:26-33`]
+- [x] [Review][Defer] `Connection::open` failure when the path points at an existing non-SQLite file (`SQLITE_NOTADB`) surfaces as a generic `CacheError::Open`. Mapping it to a dedicated `CorruptDb` variant is a UX-side decision that belongs to the consumer story (1.12) wiring `Error::Preflight`; deferred. — recorded in `deferred-work.md`
+- [x] [Review][Defer] `read_user_version` reads as `u32` directly; a manually-poisoned negative on-disk `user_version` would surface as a generic `CacheError::Pragma` (rusqlite type-conversion error) rather than as `FutureSchema` or a dedicated `CorruptVersion` variant. Pathological case; defer to a future hardening pass once a real corruption-recovery story exists. — recorded in `deferred-work.md`
+- [x] [Review][Nit] `SCHEMA_VERSION = MIGRATIONS.len() as u32` cast suppresses `clippy::cast_possible_truncation` blanket-style. A `const _: () = assert!(MIGRATIONS.len() <= u32::MAX as usize);` would let the lint stay on for future migrations. Skipped: documented `#[allow]` is the project's existing pattern, and `MIGRATIONS` is hand-edited so the assert would never fire in practice.
+- [x] [Review][Nit] Test `cells_table_matches_architecture_spec_via_public_api` collapses two `Result` layers via `.unwrap().map(Result::unwrap)`; a SQLite row-decode failure would panic without column context. Skipped: the downstream `assert_eq!` carries the user-visible "column #{i} mismatch" message; `unwrap` here only fires on test-infra failure. [`tests/cache_migrations.rs:39-49`]
+- [x] [Review][Nit] `enable_wal` synthesizes `rusqlite::Error::ExecuteReturnedResults` when SQLite reports a non-WAL mode — semantically a stretch (the variant is documented as "called execute when query was needed"). Skipped: the spec explicitly accepts this as YAGNI until a real call site needs to distinguish "WAL not enabled" from other PRAGMA failures.

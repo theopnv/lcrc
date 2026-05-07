@@ -12,6 +12,11 @@ milestone to make the deadline enforceable outside BMad context.
 
 ---
 
+## Deferred from: code review of 1-7-sqlite-schema-migrations-framework (2026-05-07)
+
+- **Map `SQLITE_NOTADB` (path points at an existing non-SQLite file) to a dedicated `CacheError::CorruptDb` variant.** Currently `Connection::open` failures of this kind surface as a generic `CacheError::Open` whose `source` is `rusqlite::Error::SqliteFailure(SQLITE_NOTADB, ...)`. UX-side mapping decision belongs to Story 1.12 (CLI wiring of `Error::Preflight` → `ExitCode::PreflightFailed = 11`); pre-defining the variant here would create dead surface area until that consumer exists.
+- **Distinguish a manually-poisoned negative or out-of-range on-disk `user_version` from a generic PRAGMA failure.** `read_user_version` (`src/cache/migrations.rs:135-138`) reads as `u32` directly; a negative value (manual edit, FS corruption) becomes `rusqlite::Error::InvalidColumnType` wrapped in `CacheError::Pragma`. A defensive `read i64 → validate non-negative → cast` path would emit a clearer diagnostic, but the corruption-recovery UX is out of v1 scope and arguably belongs in a future hardening story alongside `lcrc verify` (Epic 5).
+
 ## Deferred from: code review of 1-6-cache-key-helpers-in-src-cache-key-rs (2026-05-06)
 
 - **No `Params::temp.is_finite()` validation in `params_hash`.** Non-finite `temp` values (NaN, ±∞) produce `KeyError::ParamsHashSerialize` (now correctly documented). Pre-validation would let consumers surface a clearer "invalid temp" diagnostic rather than a serializer error. Defer to Story 1.8 (the first consumer that decides UX policy on bad `Params`).

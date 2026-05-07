@@ -62,6 +62,17 @@ pub fn open(path: &Path) -> Result<Connection, CacheError> {
         path: path.to_path_buf(),
         source,
     })?;
+    // Refuse a future-schema cache before mutating any state. Setting
+    // `PRAGMA journal_mode = WAL` materialises the `-wal` / `-shm`
+    // sidecars; deferring it until after the version gate keeps the
+    // file untouched on the FutureSchema path.
+    let current = read_user_version(&conn)?;
+    if current > SCHEMA_VERSION {
+        return Err(CacheError::FutureSchema {
+            found: current,
+            expected: SCHEMA_VERSION,
+        });
+    }
     enable_wal(&conn)?;
     apply_migrations(&mut conn)?;
     Ok(conn)

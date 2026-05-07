@@ -26,7 +26,10 @@ fn enables_wal_journal_mode() {
     let mode: String = conn
         .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(mode.to_lowercase(), "wal");
+    assert!(
+        mode.eq_ignore_ascii_case("wal"),
+        "journal_mode = {mode:?}, expected 'wal'"
+    );
 }
 
 #[test]
