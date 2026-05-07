@@ -1,6 +1,6 @@
 # Story 1.8: Cache cell write/read API with atomic semantics
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -34,18 +34,18 @@ so that no half-written cells exist (NFR-R2) and lookups before measurement work
 
 ## Tasks / Subtasks
 
-- [ ] **T1. Update `src/cache.rs` — declare `cell` submodule + extend `CacheError` with `DuplicateCell`** (AC: 1, 5)
-  - [ ] T1.1 Add `pub mod cell;` to the existing module-declaration block in `src/cache.rs`. Preserve alphabetical order: `pub mod cell; pub mod key; pub mod migrations; pub mod schema;`.
-  - [ ] T1.2 Update the file-level `//!` doc to mention the new submodule. Existing doc lists `key`, `schema`, `migrations`; add a fourth bullet: `[`cell`] owns the public `Cache` wrapper around `Connection` plus the `Cell` / `CellKey` value types and the atomic `write_cell` / `lookup_cell` primitives.`
-  - [ ] T1.3 Append a fifth variant to `pub enum CacheError` — exactly one variant in this story:
+- [x] **T1. Update `src/cache.rs` — declare `cell` submodule + extend `CacheError` with `DuplicateCell`** (AC: 1, 5)
+  - [x] T1.1 Add `pub mod cell;` to the existing module-declaration block in `src/cache.rs`. Preserve alphabetical order: `pub mod cell; pub mod key; pub mod migrations; pub mod schema;`.
+  - [x] T1.2 Update the file-level `//!` doc to mention the new submodule. Existing doc lists `key`, `schema`, `migrations`; add a fourth bullet: `[`cell`] owns the public `Cache` wrapper around `Connection` plus the `Cell` / `CellKey` value types and the atomic `write_cell` / `lookup_cell` primitives.`
+  - [x] T1.3 Append a fifth variant to `pub enum CacheError` — exactly one variant in this story:
     - `DuplicateCell { key: crate::cache::cell::CellKey }` — INSERT failed because the composite PK is already present. Display: `"cache already contains a cell with this primary key (machine_fingerprint={machine_fingerprint}, model_sha={model_sha}, backend_build={backend_build}, params_hash={params_hash}, task_id={task_id}, harness_version={harness_version}, task_subset_version={task_subset_version})"`. The Display template MUST include all seven PK columns by name + value so a debug-time encounter is fully self-describing without having to dump the source error chain.
     - The variant carries the *full* `CellKey` (not just the source `rusqlite::Error`) because the AC contract is "report which PK collided" — the rusqlite error itself only carries the constraint name, not the row values. Wrapping the `CellKey` is the canonical "what went wrong + which row" pattern.
-  - [ ] T1.4 Do NOT add `From<CacheError> for crate::error::Error`. Same rule Stories 1.5 / 1.6 / 1.7 followed: boundary mapping decisions belong to the consumer story (Story 1.12, the first CLI wiring of cache → exit code). Pre-adding the `From` impl creates dead surface area until the consumer story exists.
-  - [ ] T1.5 Do NOT add additional `CacheError` variants in this story (`SerializeBadges`, `DeserializeBadges`, `RowDecode`, `Busy`, etc.). The four variants from Story 1.7 (`Open`, `Pragma`, `MigrationFailed`, `FutureSchema`) plus the new `DuplicateCell` are the complete public error surface this story owns. Other variants land in their owner stories when concrete failure modes need distinct typed handling. The "single rusqlite::Error wrapped under a generic variant" pattern (e.g. wrap row-decode failures into a `Pragma { source }` analog) is fine for this story — see Resolved decisions for the precise mapping table.
+  - [x] T1.4 Do NOT add `From<CacheError> for crate::error::Error`. Same rule Stories 1.5 / 1.6 / 1.7 followed: boundary mapping decisions belong to the consumer story (Story 1.12, the first CLI wiring of cache → exit code). Pre-adding the `From` impl creates dead surface area until the consumer story exists.
+  - [x] T1.5 Do NOT add additional `CacheError` variants in this story (`SerializeBadges`, `DeserializeBadges`, `RowDecode`, `Busy`, etc.). The four variants from Story 1.7 (`Open`, `Pragma`, `MigrationFailed`, `FutureSchema`) plus the new `DuplicateCell` are the complete public error surface this story owns. Other variants land in their owner stories when concrete failure modes need distinct typed handling. The "single rusqlite::Error wrapped under a generic variant" pattern (e.g. wrap row-decode failures into a `Pragma { source }` analog) is fine for this story — see Resolved decisions for the precise mapping table.
 
-- [ ] **T2. Author `src/cache/cell.rs` — `Cell`, `CellKey`, `Cache` wrapper, `write_cell`, `lookup_cell`** (AC: 1, 2, 3, 4, 5)
-  - [ ] T2.1 File-level `//!` doc: `Cell` value type + the `Cache` wrapper around an open SQLite [`Connection`]. `write_cell` performs an atomic single-transaction INSERT; `lookup_cell` performs a single-row SELECT keyed on the seven-dimension composite PK. NFR-R2 (atomicity) and NFR-P5 (<100 ms lookup at 10K cells) are the binding requirements satisfied here.
-  - [ ] T2.2 Define `pub struct CellKey` — the seven-dimension composite PK as a value type:
+- [x] **T2. Author `src/cache/cell.rs` — `Cell`, `CellKey`, `Cache` wrapper, `write_cell`, `lookup_cell`** (AC: 1, 2, 3, 4, 5)
+  - [x] T2.1 File-level `//!` doc: `Cell` value type + the `Cache` wrapper around an open SQLite [`Connection`]. `write_cell` performs an atomic single-transaction INSERT; `lookup_cell` performs a single-row SELECT keyed on the seven-dimension composite PK. NFR-R2 (atomicity) and NFR-P5 (<100 ms lookup at 10K cells) are the binding requirements satisfied here.
+  - [x] T2.2 Define `pub struct CellKey` — the seven-dimension composite PK as a value type:
     ```rust
     /// Composite primary-key dimensions of a cache cell. All seven fields
     /// participate in the PK; their canonical derivation lives in
@@ -71,7 +71,7 @@ so that no half-written cells exist (NFR-R2) and lookups before measurement work
     - All fields `String` (owned). The values come from `cache::key::*` helpers which return `String`, so no lifetime gymnastics.
     - `Hash` derive added so a future caller can use `CellKey` as a `HashMap` / `HashSet` key without re-deriving — cheap and matches the natural identity semantics. `Eq` is required for `Hash` to be sound, hence the pair.
     - `PartialEq` (not `Eq` until manually verified) is fine because all fields are `String`. Actually all `String` fields satisfy `Eq` — derive both for correctness.
-  - [ ] T2.3 Define `pub struct Cell` — the full row value type:
+  - [x] T2.3 Define `pub struct Cell` — the full row value type:
     ```rust
     /// A complete cache cell: composite PK + measurement attributes.
     #[derive(Debug, Clone, PartialEq)]
@@ -112,7 +112,7 @@ so that no half-written cells exist (NFR-R2) and lookups before measurement work
     - All numeric perf fields are `f64` / `i64`. SQLite's `REAL` is 8-byte IEEE 754, `INTEGER` ranges up to `i64::MAX`. Matching widths avoids silent truncation.
     - `peak_rss_bytes: Option<i64>` (signed) because rusqlite's `Column` for `INTEGER` returns `i64` natively. SQLite stores it as a signed 8-byte int regardless. RSS values in bytes fit in `i64` comfortably (max ~9.2 EiB).
     - `badges: Vec<String>` — empty Vec is "no badges". On write, serialize via `serde_json::to_string(&self.badges)` → produces `"[]"` for empty, `"[\"foo\",\"bar\"]"` otherwise. On read, NULL → empty Vec; non-NULL → `serde_json::from_str(&s)`. See Resolved decisions § "Badges nullability convention".
-  - [ ] T2.4 Define `pub struct Cache` — the connection wrapper:
+  - [x] T2.4 Define `pub struct Cache` — the connection wrapper:
     ```rust
     /// Owned wrapper around an open SQLite [`Connection`] backing the cache.
     /// Provides the atomic single-cell `write_cell` / `lookup_cell` API.
@@ -124,7 +124,7 @@ so that no half-written cells exist (NFR-R2) and lookups before measurement work
     - **Owns the `Connection`** (not `Arc<Mutex<Connection>>`, not `Cow`, not a borrow). Rusqlite's `Connection` is the natural "open session" handle; wrapping it `Arc<Mutex<>>` would impose serialization overhead the v1 single-writer model (FR52 scan.lock) does not need. A consumer that needs concurrent access opens a second `Cache` against the same path — SQLite WAL handles concurrent readers + single writer at the engine level.
     - `Debug` derive is fine because `Connection: Debug`; clippy may grumble at `pedantic` level if the derive elides a field — `conn: Connection` is the only field, so it shows up as `Cache { conn: <Connection> }`. Acceptable.
     - **Do NOT derive `Clone`.** `Connection: !Clone`; the natural way to "duplicate" a Cache is to call `Cache::open(path)` again. Cloning the wrapper would give two handles to one `Connection`, which is not what SQLite's WAL concurrency model expects.
-  - [ ] T2.5 Implement `pub fn open(path: &Path) -> Result<Self, CacheError>` on `Cache` — the public entry point that delegates to `crate::cache::migrations::open` and then wraps the resulting `Connection`:
+  - [x] T2.5 Implement `pub fn open(path: &Path) -> Result<Self, CacheError>` on `Cache` — the public entry point that delegates to `crate::cache::migrations::open` and then wraps the resulting `Connection`:
     ```rust
     impl Cache {
         /// Open or create the cache database at `path`, enabling WAL and
@@ -143,7 +143,7 @@ so that no half-written cells exist (NFR-R2) and lookups before measurement work
     ```
     - `Cache::open` is the v1 public surface. `migrations::open` stays public (Story 1.7 contract) for callers that want a bare `Connection` (tests, future low-level tooling); `Cache::open` is the application-facing wrapper.
     - **Synchronous on purpose.** Same logic as Story 1.7's `migrations::open`: rusqlite is sync; bridging to async at the primitive layer wastes runtime. Story 1.12 (CLI wiring) wraps the synchronous `Cache::open` / `write_cell` / `lookup_cell` calls in `tokio::task::spawn_blocking`. See Resolved decisions for the locked sync/async split.
-  - [ ] T2.6 Implement `pub fn write_cell(&self, cell: &Cell) -> Result<(), CacheError>` on `Cache`:
+  - [x] T2.6 Implement `pub fn write_cell(&self, cell: &Cell) -> Result<(), CacheError>` on `Cache`:
     ```rust
     /// Atomically insert a single cell within one SQLite transaction.
     /// On primary-key collision returns [`CacheError::DuplicateCell`].
@@ -200,7 +200,7 @@ so that no half-written cells exist (NFR-R2) and lookups before measurement work
       6. Return `Ok(())`.
     - **Atomicity guarantee.** Steps 2–5 are bracketed by `BEGIN; INSERT; COMMIT;`. SQLite atomically commits the INSERT or rolls back if `commit()` fails or the `tx` is dropped without commit (RAII rollback). NFR-R2 satisfied at the SQLite-engine layer.
     - **`&mut self` vs `&self` — the borrow-check resolution.** `Connection::transaction` takes `&mut self`. So `Cache::write_cell` must be `&mut self`. This is the locked signature: `pub fn write_cell(&mut self, cell: &Cell) -> Result<(), CacheError>`. Story 2.6 (multi-model orchestrator) will need to mutate the Cache from inside a per-cell loop; passing `&mut Cache` through the call stack is fine and matches the v1 single-writer model. See Resolved decisions for the alternatives explored and rejected.
-  - [ ] T2.7 Implement `pub fn lookup_cell(&self, key: &CellKey) -> Result<Option<Cell>, CacheError>` on `Cache`:
+  - [x] T2.7 Implement `pub fn lookup_cell(&self, key: &CellKey) -> Result<Option<Cell>, CacheError>` on `Cache`:
     ```rust
     /// Look up a single cell by its composite PK. Returns `Ok(None)` if no
     /// row matches. Reads do not require a transaction — SQLite's WAL mode
@@ -236,36 +236,36 @@ so that no half-written cells exist (NFR-R2) and lookups before measurement work
       5. **Decoding `badges`**: `let badges_raw: Option<String> = row.get(18)?; let badges = match badges_raw { Some(s) => serde_json::from_str(&s).map_err(|e| /* wrap as Pragma */)?, None => Vec::new() };`. The JSON-decode error wrapper goes through `CacheError::Pragma` per the generic-variant policy in Resolved decisions.
     - **Why `prepare` + `query_row` vs `query_row` directly.** `Connection::query_row(sql, params, f)` is fine for one-shot queries. `prepare`-then-`query_row` has identical correctness; it's a stylistic call. Use whichever the dev finds clearer — both are tested by the same AC. The locked recommendation is `prepare`-then-`query_row` because the rendered SQL is long enough that locking the prepared-statement variable name aids readability.
     - **No additional indexes** beyond the implicit PK index. The composite PK on (machine_fingerprint, model_sha, backend_build, params_hash, task_id, harness_version, task_subset_version) gives SQLite a covering index for the equality SELECT — the lookup is an O(log n) probe, satisfying NFR-P5 (<100 ms at 10K cells) by an order of magnitude. Read-side query patterns for `lcrc show` (Story 4.1) drive the next index decisions.
-  - [ ] T2.8 **Do NOT** add a `Cache::write_cells_batch` / bulk-write API. Story 1.8's contract is the single-cell primitive. Bulk writes (batch INSERT, prepared statement reuse) are an Epic 6 perf optimization or land in their own story when actual usage warrants. Pre-adding them is API speculation.
-  - [ ] T2.9 **Do NOT** add a `Cache::iter_cells` / range-scan / leaderboard query. `lcrc show`'s leaderboard scan lands in Story 4.1 inside `src/cache/query.rs` (or wherever 4.1's author chooses). This story owns only the single-cell primitives.
-  - [ ] T2.10 **Do NOT** add a `Cache::delete_cell` / mutation API beyond INSERT. v1 cache cells are immutable: a re-measurement is either a NEW cell (different `backend_build` or other PK dim → distinct row) or — in `lcrc verify` — a comparison against the cached value (Story 5.1+, READ-only). DELETE / UPDATE land if and when a real consumer needs them.
-  - [ ] T2.11 **Do NOT** add a `From<rusqlite::Error> for CacheError` blanket impl. Each `?` propagation in `write_cell` / `lookup_cell` MUST go through an explicit `.map_err(|source| CacheError::Pragma { source })` (or, for the INSERT error, the duplicate-key discriminator). A blanket `From` impl loses the contextual variant choice (`Pragma` vs `MigrationFailed` vs `DuplicateCell`) that the per-call mapping makes explicit.
+  - [x] T2.8 **Do NOT** add a `Cache::write_cells_batch` / bulk-write API. Story 1.8's contract is the single-cell primitive. Bulk writes (batch INSERT, prepared statement reuse) are an Epic 6 perf optimization or land in their own story when actual usage warrants. Pre-adding them is API speculation.
+  - [x] T2.9 **Do NOT** add a `Cache::iter_cells` / range-scan / leaderboard query. `lcrc show`'s leaderboard scan lands in Story 4.1 inside `src/cache/query.rs` (or wherever 4.1's author chooses). This story owns only the single-cell primitives.
+  - [x] T2.10 **Do NOT** add a `Cache::delete_cell` / mutation API beyond INSERT. v1 cache cells are immutable: a re-measurement is either a NEW cell (different `backend_build` or other PK dim → distinct row) or — in `lcrc verify` — a comparison against the cached value (Story 5.1+, READ-only). DELETE / UPDATE land if and when a real consumer needs them.
+  - [x] T2.11 **Do NOT** add a `From<rusqlite::Error> for CacheError` blanket impl. Each `?` propagation in `write_cell` / `lookup_cell` MUST go through an explicit `.map_err(|source| CacheError::Pragma { source })` (or, for the INSERT error, the duplicate-key discriminator). A blanket `From` impl loses the contextual variant choice (`Pragma` vs `MigrationFailed` vs `DuplicateCell`) that the per-call mapping makes explicit.
 
-- [ ] **T3. In-module unit tests in `src/cache/cell.rs`** (AC: 1, 5)
-  - [ ] T3.1 Standard test-module attribute set: `#[cfg(test)] #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] mod tests { ... }`. Tests use `Cache::open` against a `tempfile::TempDir`-backed path so they exercise the real file-backed code path including WAL mode (in-memory DBs cannot be passed to `migrations::open` because `migrations::open` takes `&Path`; the unit-vs-integration split is therefore by *what is asserted*, not by `:memory:` vs file).
-  - [ ] T3.2 Helper `fn fresh_cache() -> (TempDir, Cache)` at the top of the test module: returns `(dir, Cache::open(&dir.path().join("lcrc.db")).unwrap())`. The `TempDir` is returned alongside so the caller scopes its lifetime to the test (drop = filesystem cleanup).
-  - [ ] T3.3 Helper `fn synthetic_cell(seed: u32) -> Cell` that returns a `Cell` with deterministic content varying only by `seed`. Vary at least `task_id` so distinct seeds produce distinct PKs (e.g. `task_id: format!("synthetic:task-{seed:06}")`). All other fields can stay constant per call. Used by T3 and the perf tests in T4.
-  - [ ] T3.4 `write_then_lookup_roundtrips_all_columns` — `let (_dir, mut cache) = fresh_cache(); let cell = synthetic_cell(0); cache.write_cell(&cell).unwrap(); let got = cache.lookup_cell(&cell.key).unwrap(); assert_eq!(got, Some(cell));`. AC1's full-column round-trip — the `PartialEq` derive on `Cell` (T2.3) makes this a one-line assertion.
-  - [ ] T3.5 `lookup_missing_key_returns_none` — `let (_dir, cache) = fresh_cache(); let key = synthetic_cell(7).key; assert_eq!(cache.lookup_cell(&key).unwrap(), None);`. AC4's nonexistent-key half (perf budget verified separately in T4 at scale).
-  - [ ] T3.6 `write_then_write_same_pk_returns_duplicate_cell` — `let (_dir, mut cache) = fresh_cache(); let cell = synthetic_cell(3); cache.write_cell(&cell).unwrap(); let err = cache.write_cell(&cell).unwrap_err(); match err { CacheError::DuplicateCell { key } => assert_eq!(key, cell.key), other => panic!("expected DuplicateCell, got {other:?}") }`. AC5's duplicate-PK contract.
-  - [ ] T3.7 `duplicate_cell_display_lists_all_seven_pk_dimensions` — construct a `CacheError::DuplicateCell { key: synthetic_cell(0).key }`, assert that its rendered Display string contains EACH of the seven PK column names as a substring (`"machine_fingerprint"`, `"model_sha"`, `"backend_build"`, `"params_hash"`, `"task_id"`, `"harness_version"`, `"task_subset_version"`). Pins the AC5 self-describing-message contract against future Display-template edits. Same Display-substring lesson as Story 1.5 § AC3 (`"unsupported hardware"`) and Story 1.7 § AC5 (`"upgrade lcrc"`).
-  - [ ] T3.8 `cell_with_all_optional_perf_fields_some_roundtrips` — `synthetic_cell` variant where every nullable column is `Some(...)` (`duration_seconds: Some(12.5)`, `tokens_per_sec: Some(34.7)`, etc.); write + lookup; assert exact equality including each `Some`.
-  - [ ] T3.9 `cell_with_all_optional_perf_fields_none_roundtrips` — `synthetic_cell` variant where every nullable column is `None`; write + lookup; assert each comes back `None`. NFR-R4 graceful-degrade serialization correctness.
-  - [ ] T3.10 `cell_with_empty_badges_roundtrips_as_empty_vec` — `synthetic_cell` with `badges: Vec::new()`; write + lookup; assert `got.unwrap().badges == Vec::<String>::new()`. The "empty badges → JSON `[]` → empty Vec" canonical encoding (see Resolved decisions § "Badges nullability convention").
-  - [ ] T3.11 `cell_with_multiple_badges_roundtrips_with_order_preserved` — `synthetic_cell` with `badges: vec!["ctx-limited".into(), "thermal-throttled".into()]`; write + lookup; assert `got.unwrap().badges == vec!["ctx-limited", "thermal-throttled"]`. JSON arrays preserve order; this pins that contract against any future Set-style refactor.
-  - [ ] T3.12 `pass_true_and_pass_false_roundtrip` — write two cells (different `task_id` PKs to avoid collision), one with `pass: true`, one with `pass: false`; lookup both; assert each round-trips its `pass` value. Pins the `bool → i64 0/1 → bool` mapping.
-  - [ ] T3.13 `cellkey_partial_eq_eq_hash_consistency` — `let k1 = synthetic_cell(0).key; let k2 = synthetic_cell(0).key; assert_eq!(k1, k2); use std::collections::HashSet; let mut set = HashSet::new(); set.insert(k1.clone()); assert!(set.contains(&k2));`. Cheap structural test that the derive set on `CellKey` is internally consistent (PartialEq matches Hash).
-  - [ ] T3.14 **Do NOT** add a per-column-NULL parameterized test (one test per nullable column with that single column NULL, the rest Some). The "all None" + "all Some" pair (T3.8 / T3.9) plus the round-trip equality check are sufficient: any per-column NULL handling bug would surface in the all-None test (read decodes NULL incorrectly) or the all-Some test (write encodes Some incorrectly). Per-column tests would multiply by 7 (the number of nullable columns) for negligible additional coverage.
-  - [ ] T3.15 **Do NOT** add a perf test in this in-module unit suite. The 10K-cell perf tests (AC3, AC4) live in the integration tests (T4) where they have access to the full `lcrc::cache::cell::Cache` public API and are filed under the perf-budget category. In-module tests must stay fast (cargo test runs them on every commit) — perf assertions belong to slower integration runs.
+- [x] **T3. In-module unit tests in `src/cache/cell.rs`** (AC: 1, 5)
+  - [x] T3.1 Standard test-module attribute set: `#[cfg(test)] #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] mod tests { ... }`. Tests use `Cache::open` against a `tempfile::TempDir`-backed path so they exercise the real file-backed code path including WAL mode (in-memory DBs cannot be passed to `migrations::open` because `migrations::open` takes `&Path`; the unit-vs-integration split is therefore by *what is asserted*, not by `:memory:` vs file).
+  - [x] T3.2 Helper `fn fresh_cache() -> (TempDir, Cache)` at the top of the test module: returns `(dir, Cache::open(&dir.path().join("lcrc.db")).unwrap())`. The `TempDir` is returned alongside so the caller scopes its lifetime to the test (drop = filesystem cleanup).
+  - [x] T3.3 Helper `fn synthetic_cell(seed: u32) -> Cell` that returns a `Cell` with deterministic content varying only by `seed`. Vary at least `task_id` so distinct seeds produce distinct PKs (e.g. `task_id: format!("synthetic:task-{seed:06}")`). All other fields can stay constant per call. Used by T3 and the perf tests in T4.
+  - [x] T3.4 `write_then_lookup_roundtrips_all_columns` — `let (_dir, mut cache) = fresh_cache(); let cell = synthetic_cell(0); cache.write_cell(&cell).unwrap(); let got = cache.lookup_cell(&cell.key).unwrap(); assert_eq!(got, Some(cell));`. AC1's full-column round-trip — the `PartialEq` derive on `Cell` (T2.3) makes this a one-line assertion.
+  - [x] T3.5 `lookup_missing_key_returns_none` — `let (_dir, cache) = fresh_cache(); let key = synthetic_cell(7).key; assert_eq!(cache.lookup_cell(&key).unwrap(), None);`. AC4's nonexistent-key half (perf budget verified separately in T4 at scale).
+  - [x] T3.6 `write_then_write_same_pk_returns_duplicate_cell` — `let (_dir, mut cache) = fresh_cache(); let cell = synthetic_cell(3); cache.write_cell(&cell).unwrap(); let err = cache.write_cell(&cell).unwrap_err(); match err { CacheError::DuplicateCell { key } => assert_eq!(key, cell.key), other => panic!("expected DuplicateCell, got {other:?}") }`. AC5's duplicate-PK contract.
+  - [x] T3.7 `duplicate_cell_display_lists_all_seven_pk_dimensions` — construct a `CacheError::DuplicateCell { key: synthetic_cell(0).key }`, assert that its rendered Display string contains EACH of the seven PK column names as a substring (`"machine_fingerprint"`, `"model_sha"`, `"backend_build"`, `"params_hash"`, `"task_id"`, `"harness_version"`, `"task_subset_version"`). Pins the AC5 self-describing-message contract against future Display-template edits. Same Display-substring lesson as Story 1.5 § AC3 (`"unsupported hardware"`) and Story 1.7 § AC5 (`"upgrade lcrc"`).
+  - [x] T3.8 `cell_with_all_optional_perf_fields_some_roundtrips` — `synthetic_cell` variant where every nullable column is `Some(...)` (`duration_seconds: Some(12.5)`, `tokens_per_sec: Some(34.7)`, etc.); write + lookup; assert exact equality including each `Some`.
+  - [x] T3.9 `cell_with_all_optional_perf_fields_none_roundtrips` — `synthetic_cell` variant where every nullable column is `None`; write + lookup; assert each comes back `None`. NFR-R4 graceful-degrade serialization correctness.
+  - [x] T3.10 `cell_with_empty_badges_roundtrips_as_empty_vec` — `synthetic_cell` with `badges: Vec::new()`; write + lookup; assert `got.unwrap().badges == Vec::<String>::new()`. The "empty badges → JSON `[]` → empty Vec" canonical encoding (see Resolved decisions § "Badges nullability convention").
+  - [x] T3.11 `cell_with_multiple_badges_roundtrips_with_order_preserved` — `synthetic_cell` with `badges: vec!["ctx-limited".into(), "thermal-throttled".into()]`; write + lookup; assert `got.unwrap().badges == vec!["ctx-limited", "thermal-throttled"]`. JSON arrays preserve order; this pins that contract against any future Set-style refactor.
+  - [x] T3.12 `pass_true_and_pass_false_roundtrip` — write two cells (different `task_id` PKs to avoid collision), one with `pass: true`, one with `pass: false`; lookup both; assert each round-trips its `pass` value. Pins the `bool → i64 0/1 → bool` mapping.
+  - [x] T3.13 `cellkey_partial_eq_eq_hash_consistency` — `let k1 = synthetic_cell(0).key; let k2 = synthetic_cell(0).key; assert_eq!(k1, k2); use std::collections::HashSet; let mut set = HashSet::new(); set.insert(k1.clone()); assert!(set.contains(&k2));`. Cheap structural test that the derive set on `CellKey` is internally consistent (PartialEq matches Hash).
+  - [x] T3.14 **Do NOT** add a per-column-NULL parameterized test (one test per nullable column with that single column NULL, the rest Some). The "all None" + "all Some" pair (T3.8 / T3.9) plus the round-trip equality check are sufficient: any per-column NULL handling bug would surface in the all-None test (read decodes NULL incorrectly) or the all-Some test (write encodes Some incorrectly). Per-column tests would multiply by 7 (the number of nullable columns) for negligible additional coverage.
+  - [x] T3.15 **Do NOT** add a perf test in this in-module unit suite. The 10K-cell perf tests (AC3, AC4) live in the integration tests (T4) where they have access to the full `lcrc::cache::cell::Cache` public API and are filed under the perf-budget category. In-module tests must stay fast (cargo test runs them on every commit) — perf assertions belong to slower integration runs.
 
-- [ ] **T4. Author `tests/cache_roundtrip.rs` — public-API integration tests + NFR-P5 perf budget** (AC: 1, 2, 3, 4, 5)
-  - [ ] T4.1 New file `tests/cache_roundtrip.rs`. Standard integration-test crate (separate compilation unit; sees `lcrc::*` only via the public API, no `pub(crate)` access). Standard exemption attribute: `#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` at file top (matches `tests/cache_migrations.rs:6`, `tests/cli_exit_codes.rs`, etc.). Plain `#[test]` (NOT `#[tokio::test]` — `Cache::open`, `write_cell`, `lookup_cell` are sync).
-  - [ ] T4.2 Imports: `use lcrc::cache::cell::{Cache, Cell, CellKey}; use lcrc::cache::CacheError; use std::time::{Duration, Instant}; use tempfile::TempDir;`. No glob imports.
-  - [ ] T4.3 Helper `fn cell_at(seed: u32) -> Cell` — same shape as T3.3's `synthetic_cell` but lives in the integration crate (which cannot see the `cell.rs` `tests` module). Vary `task_id` by seed; keep all other fields constant + plausible. Used by every test in this file.
-  - [ ] T4.4 Helper `fn fresh_cache() -> (TempDir, Cache)` — same shape as T3.2's helper, lifted into this crate (same justification: the test module of `cell.rs` is not visible to integration crates).
-  - [ ] T4.5 `roundtrip_single_cell_via_public_api` — write a cell via `Cache::write_cell`, look it up via `Cache::lookup_cell`, assert exact `PartialEq` equality. AC1's end-to-end verification at the public boundary.
-  - [ ] T4.6 `lookup_missing_key_returns_none_via_public_api` — `Cache::lookup_cell(&unrelated_key).unwrap()` returns `None`. AC4's nonexistent-key correctness.
-  - [ ] T4.7 `transaction_rollback_on_panic_leaves_no_partial_row` — AC2 verification. The cleanest in-process simulation of "a write that aborts mid-transaction" is to use `std::panic::catch_unwind` around a closure that opens a transaction, does a partial INSERT (or skips the commit), then panics:
+- [x] **T4. Author `tests/cache_roundtrip.rs` — public-API integration tests + NFR-P5 perf budget** (AC: 1, 2, 3, 4, 5)
+  - [x] T4.1 New file `tests/cache_roundtrip.rs`. Standard integration-test crate (separate compilation unit; sees `lcrc::*` only via the public API, no `pub(crate)` access). Standard exemption attribute: `#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` at file top (matches `tests/cache_migrations.rs:6`, `tests/cli_exit_codes.rs`, etc.). Plain `#[test]` (NOT `#[tokio::test]` — `Cache::open`, `write_cell`, `lookup_cell` are sync).
+  - [x] T4.2 Imports: `use lcrc::cache::cell::{Cache, Cell, CellKey}; use lcrc::cache::CacheError; use std::time::{Duration, Instant}; use tempfile::TempDir;`. No glob imports.
+  - [x] T4.3 Helper `fn cell_at(seed: u32) -> Cell` — same shape as T3.3's `synthetic_cell` but lives in the integration crate (which cannot see the `cell.rs` `tests` module). Vary `task_id` by seed; keep all other fields constant + plausible. Used by every test in this file.
+  - [x] T4.4 Helper `fn fresh_cache() -> (TempDir, Cache)` — same shape as T3.2's helper, lifted into this crate (same justification: the test module of `cell.rs` is not visible to integration crates).
+  - [x] T4.5 `roundtrip_single_cell_via_public_api` — write a cell via `Cache::write_cell`, look it up via `Cache::lookup_cell`, assert exact `PartialEq` equality. AC1's end-to-end verification at the public boundary.
+  - [x] T4.6 `lookup_missing_key_returns_none_via_public_api` — `Cache::lookup_cell(&unrelated_key).unwrap()` returns `None`. AC4's nonexistent-key correctness.
+  - [x] T4.7 `transaction_rollback_on_panic_leaves_no_partial_row` — AC2 verification. The cleanest in-process simulation of "a write that aborts mid-transaction" is to use `std::panic::catch_unwind` around a closure that opens a transaction, does a partial INSERT (or skips the commit), then panics:
     ```rust
     use rusqlite::Connection;
     let dir = TempDir::new().unwrap();
@@ -295,7 +295,7 @@ so that no half-written cells exist (NFR-R2) and lookups before measurement work
     - **Why `unchecked_transaction` (not `transaction`)**: `Connection::transaction` takes `&mut self`, so the `Connection` is mutably borrowed across the closure body, and `catch_unwind` requires `RefUnwindSafe + UnwindSafe` bounds the borrow doesn't satisfy. `unchecked_transaction` takes `&self` (shared borrow) and is the documented rusqlite escape hatch for exactly this pattern. The "unchecked" refers to "no compile-time prevention of nested-tx misuse", not to anything atomicity-relevant.
     - **Why the test uses raw `migrations::open` + `unchecked_transaction` instead of `Cache::write_cell`**: the production `write_cell` uses `transaction()` which RAII-rolls-back on panic correctly, but exercising the panic path through it would require panicking inside the rusqlite-managed transaction scope. The raw transaction is the closest equivalent — same atomicity guarantees, more direct test of "INSERT executed but transaction aborted → nothing visible after reopen".
     - The post-panic `Cache::open` (against the same path) is the verification step: a successful open + lookup = no partial state — NFR-R2 atomicity at the SQLite-engine layer.
-  - [ ] T4.8 `lookup_existing_key_at_10k_cells_under_100ms_NFR_P5` — AC3 verification:
+  - [x] T4.8 `lookup_existing_key_at_10k_cells_under_100ms_NFR_P5` — AC3 verification:
     ```rust
     let (_dir, mut cache) = fresh_cache();
     for seed in 0..10_000u32 {
@@ -310,26 +310,26 @@ so that no half-written cells exist (NFR-R2) and lookups before measurement work
     ```
     - **Cold-cache budget realism**: SQLite PK lookup at 10K rows on a stock SSD-backed `TempDir` typically completes in single-digit milliseconds. The 100 ms budget has ~10× headroom even on the slowest CI runner.
     - **Build-time creep awareness**: this test populates 10K rows via 10K individual `write_cell` calls, each its own transaction. Estimated wall-clock: ~3-8 seconds on M1 Pro, possibly ~10-15 s on the CI runner. Acceptable for an integration test; if the populate phase exceeds 30 s on CI in practice, switch the populate phase to a single explicit transaction that batches all 10K INSERTs (the perf measurement is the LOOKUP, not the populate). See Resolved decisions for the populate-phase budget guidance.
-  - [ ] T4.9 `lookup_missing_key_at_10k_cells_under_100ms_NFR_P5` — AC4 verification: same setup as T4.8 (10K populated cells), look up a key whose `task_id` is `"synthetic:task-999999"` (well outside the populated `0..10_000` range), assert `result == None` and `elapsed < Duration::from_millis(100)`.
+  - [x] T4.9 `lookup_missing_key_at_10k_cells_under_100ms_NFR_P5` — AC4 verification: same setup as T4.8 (10K populated cells), look up a key whose `task_id` is `"synthetic:task-999999"` (well outside the populated `0..10_000` range), assert `result == None` and `elapsed < Duration::from_millis(100)`.
     - Both T4.8 and T4.9 may share the populate-phase scaffolding via a small helper `fn populate_10k(cache: &mut Cache)` to avoid duplicating the loop. The two tests separate by AC and by what they assert about the result.
-  - [ ] T4.10 `duplicate_pk_returns_duplicate_cell_via_public_api` — AC5 end-to-end via the public API: write a cell, attempt to write the same cell again, match `Err(CacheError::DuplicateCell { key })` with `key == cell.key`. Mirrors T3.6 but via the integration crate boundary.
-  - [ ] T4.11 **Do NOT** spawn the `lcrc` binary in this test (no `assert_cmd::Command::cargo_bin("lcrc")`). The CLI wiring of `Cache` lives in Story 1.12; testing it here would conflate this story's primitive surface with the integration surface. Same rule Story 1.7 § T5.8 applied to `cache_migrations.rs`.
-  - [ ] T4.12 **Do NOT** add a concurrent-writer test (two threads, one or two Cache instances, racing the same PK). The AC5 "(whether concurrent or sequential)" parenthetical is a generality clause — the same invariant holds in both access patterns because the test surface is the SQLite transaction layer. The single-writer model (FR52 scan.lock, Story 6.4) prevents real-world concurrent same-PK writes; testing the SQLite-level edge case here would over-scope a primitive-author story.
-  - [ ] T4.13 **Do NOT** assert on the absolute lookup wall-clock value beyond `< 100 ms`. The AC budget is 100 ms; tightening the assertion to `< 10 ms` or similar invites flaky CI on slow runners. The 100 ms ceiling is the spec contract.
+  - [x] T4.10 `duplicate_pk_returns_duplicate_cell_via_public_api` — AC5 end-to-end via the public API: write a cell, attempt to write the same cell again, match `Err(CacheError::DuplicateCell { key })` with `key == cell.key`. Mirrors T3.6 but via the integration crate boundary.
+  - [x] T4.11 **Do NOT** spawn the `lcrc` binary in this test (no `assert_cmd::Command::cargo_bin("lcrc")`). The CLI wiring of `Cache` lives in Story 1.12; testing it here would conflate this story's primitive surface with the integration surface. Same rule Story 1.7 § T5.8 applied to `cache_migrations.rs`.
+  - [x] T4.12 **Do NOT** add a concurrent-writer test (two threads, one or two Cache instances, racing the same PK). The AC5 "(whether concurrent or sequential)" parenthetical is a generality clause — the same invariant holds in both access patterns because the test surface is the SQLite transaction layer. The single-writer model (FR52 scan.lock, Story 6.4) prevents real-world concurrent same-PK writes; testing the SQLite-level edge case here would over-scope a primitive-author story.
+  - [x] T4.13 **Do NOT** assert on the absolute lookup wall-clock value beyond `< 100 ms`. The AC budget is 100 ms; tightening the assertion to `< 10 ms` or similar invites flaky CI on slow runners. The 100 ms ceiling is the spec contract.
 
-- [ ] **T5. Local CI mirror** (AC: 1, 2, 3, 4, 5)
-  - [ ] T5.1 Run `cargo build` — confirms the module compiles. `Cargo.lock` should be unchanged: this story uses `rusqlite` (Cargo.toml line 45), `serde_json` (line 31, added by Story 1.6), `tempfile` (line 49), `thiserror` (line 60) — all already locked. If `Cargo.lock` does change, investigate before pushing — that signals an unintended dep introduction.
-  - [ ] T5.2 Run `cargo fmt` — apply rustfmt; commit any reformatted lines.
-  - [ ] T5.3 Run `cargo clippy --all-targets --all-features -- -D warnings` locally. Specifically watch for:
+- [x] **T5. Local CI mirror** (AC: 1, 2, 3, 4, 5)
+  - [x] T5.1 Run `cargo build` — confirms the module compiles. `Cargo.lock` should be unchanged: this story uses `rusqlite` (Cargo.toml line 45), `serde_json` (line 31, added by Story 1.6), `tempfile` (line 49), `thiserror` (line 60) — all already locked. If `Cargo.lock` does change, investigate before pushing — that signals an unintended dep introduction.
+  - [x] T5.2 Run `cargo fmt` — apply rustfmt; commit any reformatted lines.
+  - [x] T5.3 Run `cargo clippy --all-targets --all-features -- -D warnings` locally. Specifically watch for:
     - `clippy::missing_errors_doc` on `pub fn open` / `write_cell` / `lookup_cell` — `# Errors` rustdoc section per T2.5 / T2.6 / T2.7.
     - `clippy::missing_docs` on every `pub` item (`Cache`, `Cell`, `CellKey`, every public field of `Cell` / `CellKey`, every method).
     - `clippy::module_name_repetitions` on `Cache` may NOT fire because the type is `Cache` (no `Cell` suffix) inside the `cell` submodule — verify locally.
     - `clippy::struct_excessive_bools` should NOT fire — `Cell` has exactly one `bool` field (`pass`).
     - `clippy::too_many_arguments` should NOT fire — methods take `&Cell` / `&CellKey`, not flat argument lists.
     - `clippy::needless_pass_by_value` should NOT fire — all public method params are `&self` / `&mut self` / `&Cell` / `&CellKey`.
-  - [ ] T5.4 Run `cargo test` — confirms all in-module unit tests in `src/cache/cell.rs::tests` pass AND the new `tests/cache_roundtrip.rs` integration tests pass AND every existing test in the suite (in-module suites for `cache::key`, `cache::migrations`, `error`, `exit_code`, `machine`, `output`, `version`, etc., plus `tests/cache_migrations.rs`, `tests/cli_exit_codes.rs`, `tests/cli_help_version.rs`, `tests/machine_fingerprint.rs`) still passes.
-  - [ ] T5.5 Manual scope-discipline grep: `git grep -nE 'rusqlite::|PRAGMA|user_version|INSERT INTO cells|SELECT .* FROM cells' src/ tests/ | grep -v '^src/cache/cell.rs:' | grep -v '^src/cache/migrations.rs:' | grep -v '^src/cache/schema.rs:' | grep -v '^src/cache.rs:' | grep -v '^tests/cache_migrations.rs:' | grep -v '^tests/cache_roundtrip.rs:'`. Must produce zero matches — the rusqlite + cells-table SQL surface stays contained inside the cache modules and their tests. Same single-source-of-truth grep contract Stories 1.6 / 1.7 used.
-  - [ ] T5.6 Verify the perf-test wall-clock on the local machine: `cargo test --test cache_roundtrip lookup_existing_key_at_10k_cells_under_100ms_NFR_P5 -- --nocapture` — run manually; eyeball that the test wall-clock is well under the 100 ms budget (typically single-digit ms on M1 Pro). If the lookup approaches 100 ms locally, investigate the populate phase (per-row tx overhead) and consider the bulk-populate optimization noted in T4.8.
+  - [x] T5.4 Run `cargo test` — confirms all in-module unit tests in `src/cache/cell.rs::tests` pass AND the new `tests/cache_roundtrip.rs` integration tests pass AND every existing test in the suite (in-module suites for `cache::key`, `cache::migrations`, `error`, `exit_code`, `machine`, `output`, `version`, etc., plus `tests/cache_migrations.rs`, `tests/cli_exit_codes.rs`, `tests/cli_help_version.rs`, `tests/machine_fingerprint.rs`) still passes.
+  - [x] T5.5 Manual scope-discipline grep: `git grep -nE 'rusqlite::|PRAGMA|user_version|INSERT INTO cells|SELECT .* FROM cells' src/ tests/ | grep -v '^src/cache/cell.rs:' | grep -v '^src/cache/migrations.rs:' | grep -v '^src/cache/schema.rs:' | grep -v '^src/cache.rs:' | grep -v '^tests/cache_migrations.rs:' | grep -v '^tests/cache_roundtrip.rs:'`. Must produce zero matches — the rusqlite + cells-table SQL surface stays contained inside the cache modules and their tests. Same single-source-of-truth grep contract Stories 1.6 / 1.7 used.
+  - [x] T5.6 Verify the perf-test wall-clock on the local machine: `cargo test --test cache_roundtrip lookup_existing_key_at_10k_cells_under_100ms_NFR_P5 -- --nocapture` — run manually; eyeball that the test wall-clock is well under the 100 ms budget (typically single-digit ms on M1 Pro). If the lookup approaches 100 ms locally, investigate the populate phase (per-row tx overhead) and consider the bulk-populate optimization noted in T4.8.
 
 ## Dev Notes
 
@@ -651,10 +651,34 @@ No conflicts detected between this story's plan and the existing codebase or pla
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-opus-4-7 (1M context) via bmad-dev-story workflow
 
 ### Debug Log References
 
+- `cargo build` — clean (no `Cargo.lock` change; locked deps reused)
+- `cargo fmt --all` — applied
+- `cargo clippy --all-targets --all-features -- -D warnings` — clean after boxing `CellKey` inside `CacheError::DuplicateCell` to keep the enum under clippy's `result_large_err` 128-byte budget (raw `CellKey` is 168 bytes; boxing reduces the variant payload to a pointer)
+- `cargo test` — 94 tests pass across 8 suites (in-module suites for `cache::cell`, `cache::migrations`, `cache::key`, `error`, `exit_code`, `machine`, `output`, `version`, plus integration crates `cache_migrations`, `cache_roundtrip`, `cli_exit_codes`, `cli_help_version`, `machine_fingerprint`)
+- T5.5 single-source-of-truth grep — empty: `rusqlite::` and `cells`-table SQL stay inside `src/cache/{cell,migrations,schema}.rs` + `src/cache.rs` + `tests/cache_{migrations,roundtrip}.rs`
+- Wall-clock for the two 10K-cell perf integration tests is well under the 100 ms budget; full integration crate completes in ~3 s (populate phase ≈ 2.7 s, lookup ≈ single-digit ms)
+
 ### Completion Notes List
 
+- Implemented `Cache`, `Cell`, `CellKey` and the atomic `write_cell` / `lookup_cell` primitives in `src/cache/cell.rs` per the locked spec. Module-level decode helper `decode_cell_row` keeps the SQL preparation and column-by-column row decode independently readable.
+- Extended `src/cache.rs` with `pub mod cell;` and the fifth `CacheError::DuplicateCell` variant. Display includes all seven PK column names by literal substring; payload is `Box<CellKey>` (see boxing note below).
+- Boxing decision: the spec asked for `DuplicateCell { key: CellKey }`, but a 168-byte `CellKey` payload pushes `CacheError` past clippy's 128-byte `result_large_err` budget under workspace `pedantic = warn` + `-D warnings`, cascading onto every existing `Result<_, CacheError>` site (`migrations::open`, `enable_wal`, `apply_migrations`, `read_user_version`). Box keeps the variant carrying the full key (the AC contract) while reducing the variant payload to a pointer. Tests destructure `CacheError::DuplicateCell { key }` and assert `*key == cell.key`.
+- Discriminator pattern in `write_cell`'s INSERT-error map: `if let SqliteFailure(ffi_err, _) && ffi_err.code == ConstraintViolation && ffi_err.extended_code == SQLITE_CONSTRAINT_PRIMARYKEY` (let-chains, stable since 1.88; MSRV 1.95). The spec-locked typed extended-code path; no string matching, no broad `ConstraintViolation` short-circuit.
+- Atomicity test (T4.7) uses `Connection::unchecked_transaction` + `std::panic::catch_unwind` with `AssertUnwindSafe`. After the panic, a fresh `Cache::open(path)` + `lookup_cell(&cell.key)` returns `Ok(None)`, confirming the partially-applied INSERT was rolled back at the engine layer (NFR-R2).
+- 10K-cell perf tests share a `populate_10k(&mut cache)` helper that performs 10 000 single-row `Cache::write_cell` calls (each its own transaction). On this machine the populate phase is ~2.7 s; the lookup phase (the actual NFR-P5 measurement) is single-digit milliseconds. No bulk-INSERT optimisation needed.
+- No `From<CacheError> for crate::error::Error`, no boundary mapping, no tracing events, no CLI wiring — those are Story 1.12's concerns. No `query.rs` pre-stub. No new dependencies; `Cargo.lock` unchanged.
+
 ### File List
+
+- `src/cache.rs` — UPDATED: added `pub mod cell;` declaration; appended fifth `DuplicateCell { key: Box<CellKey> }` variant to `CacheError`; updated module-level `//!` doc to list four submodules.
+- `src/cache/cell.rs` — NEW: `pub struct CellKey`, `pub struct Cell`, `pub struct Cache`; `impl Cache { pub fn open, pub fn write_cell, pub fn lookup_cell }`; module-level decode helper `decode_cell_row`; in-module `#[cfg(test)] mod tests` with the ten unit tests required by T3.
+- `tests/cache_roundtrip.rs` — NEW: six integration tests covering AC1, AC2 (panic-rollback via `unchecked_transaction` + `catch_unwind`), AC3, AC4 (NFR-P5 perf budget at 10 000 cells), AC5.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — UPDATED: `1-8-…` `ready-for-dev` → `in-progress` → `review`; appended dated history comments; bumped `last_updated` to `2026-05-07`.
+
+## Change Log
+
+- 2026-05-07: Implemented Story 1.8 — `Cache` wrapper with atomic `write_cell` / `lookup_cell` primitives, `CellKey` / `Cell` value types, and the `CacheError::DuplicateCell` variant. 10 in-module unit tests + 6 integration tests (incl. NFR-R2 atomicity via panic-rollback simulation and NFR-P5 perf budget at 10 000 cells). Local CI mirror green; no new dependencies.
