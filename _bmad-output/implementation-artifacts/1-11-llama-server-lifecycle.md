@@ -1,6 +1,6 @@
 # Story 1.11: llama-server lifecycle
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,12 +24,12 @@ so that each measurement has a known-ready server to talk to and no orphan proce
 
 ## Tasks / Subtasks
 
-- [ ] **T1. Create `src/scan.rs` — parent module root** (AC: all)
-  - [ ] T1.1 Create `src/scan.rs` with `pub mod server_lifecycle;` as its sole content. This is the parent for the `scan/` submodule tree; later stories add `orchestrator`, `canary`, `lock`, `signal`, `timeout` submodules following this pattern.
-  - [ ] T1.2 Add `pub mod scan;` to `src/lib.rs` in alphabetical order (between `pub mod sandbox;` and `pub mod util;` — `sa` < `sc` < `u`).
+- [x] **T1. Create `src/scan.rs` — parent module root** (AC: all)
+  - [x] T1.1 Create `src/scan.rs` with `pub mod server_lifecycle;` as its sole content. This is the parent for the `scan/` submodule tree; later stories add `orchestrator`, `canary`, `lock`, `signal`, `timeout` submodules following this pattern.
+  - [x] T1.2 Add `pub mod scan;` to `src/lib.rs` in alphabetical order (between `pub mod sandbox;` and `pub mod util;` — `sa` < `sc` < `u`).
 
-- [ ] **T2. Author `src/scan/server_lifecycle.rs` — types** (AC: 1, 2, 3, 4, 5)
-  - [ ] T2.1 File-level `//!` doc:
+- [x] **T2. Author `src/scan/server_lifecycle.rs` — types** (AC: 1, 2, 3, 4, 5)
+  - [x] T2.1 File-level `//!` doc:
     ```rust
     //! llama-server process lifecycle — spawn, health-gate, and teardown.
     //!
@@ -51,7 +51,7 @@ so that each measurement has a known-ready server to talk to and no orphan proce
         pub ctx: u32,
     }
     ```
-  - [ ] T2.3 Define `pub enum ServerError`:
+  - [x] T2.3 Define `pub enum ServerError`:
     ```rust
     /// Errors produced by [`LlamaServer::start`].
     #[derive(Debug, thiserror::Error)]
@@ -63,7 +63,7 @@ so that each measurement has a known-ready server to talk to and no orphan proce
     }
     ```
     Use a single variant; pack all failure modes into the `String` payload for clarity. The AC language "Err(ServerStartupFailure)" maps to `ServerError::StartupFailure`.
-  - [ ] T2.4 Define `pub struct LlamaServer`:
+  - [x] T2.4 Define `pub struct LlamaServer`:
     ```rust
     /// Configuration for spawning a `llama-server` process.
     ///
@@ -89,7 +89,7 @@ so that each measurement has a known-ready server to talk to and no orphan proce
         fn default() -> Self { Self::new() }
     }
     ```
-  - [ ] T2.5 Define `pub struct ServerHandle`:
+  - [x] T2.5 Define `pub struct ServerHandle`:
     ```rust
     /// A running `llama-server` instance.
     ///
@@ -107,7 +107,7 @@ so that each measurement has a known-ready server to talk to and no orphan proce
         pub fn port(&self) -> u16 { self.port }
     }
     ```
-  - [ ] T2.6 Implement `Drop` for `ServerHandle`:
+  - [x] T2.6 Implement `Drop` for `ServerHandle`:
     ```rust
     impl Drop for ServerHandle {
         fn drop(&mut self) {
@@ -124,8 +124,8 @@ so that each measurement has a known-ready server to talk to and no orphan proce
     - SIGTERM attempt is best-effort; SIGKILL is the backstop. Both return errors for processes that already exited — ignore those errors.
     - `nix` is already in `Cargo.toml` with features `["signal", "user"]` (added in Story 1.9).
 
-- [ ] **T3. Implement `LlamaServer::start` — port allocation + process spawn** (AC: 1, 3, 4, 5)
-  - [ ] T3.1 Implement port allocation as a private helper:
+- [x] **T3. Implement `LlamaServer::start` — port allocation + process spawn** (AC: 1, 3, 4, 5)
+  - [x] T3.1 Implement port allocation as a private helper:
     ```rust
     fn allocate_free_port() -> Result<u16, ServerError> {
         let listener = std::net::TcpListener::bind("127.0.0.1:0")
@@ -139,7 +139,7 @@ so that each measurement has a known-ready server to talk to and no orphan proce
     }
     ```
     The TOCTOU window between this drop and `llama-server`'s bind is milliseconds and acceptable. No two `allocate_free_port` calls within the same process return the same port because `TcpListener` binds with `SO_REUSEADDR` disabled.
-  - [ ] T3.2 Implement `LlamaServer::start`:
+  - [x] T3.2 Implement `LlamaServer::start`:
     ```rust
     /// Spawn `llama-server` for the given model and parameters.
     ///
@@ -186,8 +186,8 @@ so that each measurement has a known-ready server to talk to and no orphan proce
     }
     ```
 
-- [ ] **T4. Implement `wait_for_ready` — health polling with process-exit detection** (AC: 1, 3, 4)
-  - [ ] T4.1 Implement `wait_for_ready` as a private async helper:
+- [x] **T4. Implement `wait_for_ready` — health polling with process-exit detection** (AC: 1, 3, 4)
+  - [x] T4.1 Implement `wait_for_ready` as a private async helper:
     ```rust
     async fn wait_for_ready(
         process: &mut tokio::process::Child,
@@ -242,39 +242,39 @@ so that each measurement has a known-ready server to talk to and no orphan proce
         }
     }
     ```
-  - [ ] T4.2 The 500 ms poll interval is intentional: fast enough to minimize wasted time, slow enough not to spam the not-yet-bound server with connection errors during early startup.
-  - [ ] T4.3 Per-request timeout of 1 s prevents a single stalled HTTP call from eating a large chunk of the overall `startup_timeout`.
-  - [ ] T4.4 `stderr(Stdio::inherit())` was chosen so that model-load error messages from llama-server appear directly in lcrc's terminal output, satisfying AC3's "with the failure reason" without the complexity of async stderr capture.
-  - [ ] T4.5 `stdout(Stdio::null())` suppresses llama-server's per-request log chatter from lcrc's output.
+  - [x] T4.2 The 500 ms poll interval is intentional: fast enough to minimize wasted time, slow enough not to spam the not-yet-bound server with connection errors during early startup.
+  - [x] T4.3 Per-request timeout of 1 s prevents a single stalled HTTP call from eating a large chunk of the overall `startup_timeout`.
+  - [x] T4.4 `stderr(Stdio::inherit())` was chosen so that model-load error messages from llama-server appear directly in lcrc's terminal output, satisfying AC3's "with the failure reason" without the complexity of async stderr capture.
+  - [x] T4.5 `stdout(Stdio::null())` suppresses llama-server's per-request log chatter from lcrc's output.
 
-- [ ] **T5. In-module unit tests in `server_lifecycle.rs::tests`** (AC: 3, 5)
-  - [ ] T5.1 All test blocks carry `#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]`.
-  - [ ] T5.2 Test `server_error_display_startup_failure`: create `ServerError::StartupFailure("model not found".into())`, assert `format!("{e}")` starts with `"server startup failed: "`.
-  - [ ] T5.3 Test `params_construction`: assert `Params { ctx: 4096 }.ctx == 4096`.
-  - [ ] T5.4 Test `concurrent_port_allocation`: call `allocate_free_port()` twice, assert results differ (`p1 != p2`). This directly validates AC5's mechanism without requiring a real server.
-  - [ ] T5.5 Test `llama_server_default_timeout_is_60s`: `LlamaServer::new().startup_timeout == Duration::from_secs(60)`. Access the field via a test-only accessor or make `startup_timeout` pub(crate) for tests.
+- [x] **T5. In-module unit tests in `server_lifecycle.rs::tests`** (AC: 3, 5)
+  - [x] T5.1 All test blocks carry `#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]`.
+  - [x] T5.2 Test `server_error_display_startup_failure`: create `ServerError::StartupFailure("model not found".into())`, assert `format!("{e}")` starts with `"server startup failed: "`.
+  - [x] T5.3 Test `params_construction`: assert `Params { ctx: 4096 }.ctx == 4096`.
+  - [x] T5.4 Test `concurrent_port_allocation`: call `allocate_free_port()` twice, assert results differ (`p1 != p2`). This directly validates AC5's mechanism without requiring a real server.
+  - [x] T5.5 Test `llama_server_default_timeout_is_60s`: `LlamaServer::new().startup_timeout == Duration::from_secs(60)`. Access the field via a test-only accessor or make `startup_timeout` pub(crate) for tests.
 
-- [ ] **T6. Integration test file `tests/server_lifecycle.rs`** (AC: 1, 2, 3, 4, 5)
-  - [ ] T6.1 All tests gate on `LCRC_INTEGRATION_TEST_SERVER=1` env var. If not set, print `"skipping: set LCRC_INTEGRATION_TEST_SERVER=1 and LCRC_TEST_MODEL_PATH=<path> to run"` and return.
-  - [ ] T6.2 Also check that `llama-server` is in PATH (call `which::which("llama-server").is_ok()` or use `tokio::process::Command::new("llama-server").arg("--version")` — see note on `which` crate below).
-  - [ ] T6.3 Test `server_starts_and_port_is_nonzero` (AC1): load `LCRC_TEST_MODEL_PATH`, call `LlamaServer::new().start(path, &Params { ctx: 512 }).await`, assert `Ok(handle)`, assert `handle.port() > 0`, drop handle.
-  - [ ] T6.4 Test `server_drop_terminates_process` (AC2): start server, record `let port = handle.port()`, drop handle explicitly (`drop(handle)`), then verify the process is gone by attempting `reqwest::get(format!("http://127.0.0.1:{port}/health")).await` and asserting it fails (connection refused).
-  - [ ] T6.5 Test `server_corrupt_model_returns_err` (AC3): create a `tempfile::NamedTempFile`, write a few bytes of junk (`b"not a gguf"`), call `start` with its path, assert `Err(ServerError::StartupFailure(_))` is returned.
-  - [ ] T6.6 Test `server_startup_timeout_kills_process` (AC4): marked `#[ignore]` because reliably simulating a hanging llama-server in CI is complex. Leave skeleton with comment: "Use LlamaServer::with_timeout(Duration::from_millis(100)) with a valid model path; the model takes longer than 100ms to load on most hardware."
-  - [ ] T6.7 Test `concurrent_starts_different_ports` (AC5): `tokio::join!` two `start` calls (using `LlamaServer::with_timeout(Duration::from_secs(120))`). Assert both return `Ok`, assert `h1.port() != h2.port()`. Drop both handles. Requires `LCRC_TEST_MODEL_PATH`. May be slow on low-RAM machines.
-  - [ ] T6.8 All tests use `#[tokio::test(flavor = "current_thread")]`.
-  - [ ] T6.9 Do NOT add a `which` crate dependency. Use `std::process::Command::new("llama-server").arg("--version").output().is_ok()` to check for binary availability in tests.
+- [x] **T6. Integration test file `tests/server_lifecycle.rs`** (AC: 1, 2, 3, 4, 5)
+  - [x] T6.1 All tests gate on `LCRC_INTEGRATION_TEST_SERVER=1` env var. If not set, print `"skipping: set LCRC_INTEGRATION_TEST_SERVER=1 and LCRC_TEST_MODEL_PATH=<path> to run"` and return.
+  - [x] T6.2 Also check that `llama-server` is in PATH (call `which::which("llama-server").is_ok()` or use `tokio::process::Command::new("llama-server").arg("--version")` — see note on `which` crate below).
+  - [x] T6.3 Test `server_starts_and_port_is_nonzero` (AC1): load `LCRC_TEST_MODEL_PATH`, call `LlamaServer::new().start(path, &Params { ctx: 512 }).await`, assert `Ok(handle)`, assert `handle.port() > 0`, drop handle.
+  - [x] T6.4 Test `server_drop_terminates_process` (AC2): start server, record `let port = handle.port()`, drop handle explicitly (`drop(handle)`), then verify the process is gone by attempting `reqwest::get(format!("http://127.0.0.1:{port}/health")).await` and asserting it fails (connection refused).
+  - [x] T6.5 Test `server_corrupt_model_returns_err` (AC3): create a `tempfile::NamedTempFile`, write a few bytes of junk (`b"not a gguf"`), call `start` with its path, assert `Err(ServerError::StartupFailure(_))` is returned.
+  - [x] T6.6 Test `server_startup_timeout_kills_process` (AC4): marked `#[ignore]` because reliably simulating a hanging llama-server in CI is complex. Leave skeleton with comment: "Use LlamaServer::with_timeout(Duration::from_millis(100)) with a valid model path; the model takes longer than 100ms to load on most hardware."
+  - [x] T6.7 Test `concurrent_starts_different_ports` (AC5): `tokio::join!` two `start` calls (using `LlamaServer::with_timeout(Duration::from_secs(120))`). Assert both return `Ok`, assert `h1.port() != h2.port()`. Drop both handles. Requires `LCRC_TEST_MODEL_PATH`. May be slow on low-RAM machines.
+  - [x] T6.8 All tests use `#[tokio::test(flavor = "current_thread")]`.
+  - [x] T6.9 Do NOT add a `which` crate dependency. Use `std::process::Command::new("llama-server").arg("--version").output().is_ok()` to check for binary availability in tests.
 
-- [ ] **T7. Local CI mirror** (AC: all)
-  - [ ] T7.1 `cargo build` — all new modules compile; `tokio::process`, `reqwest`, `nix`, `thiserror` types all resolve.
-  - [ ] T7.2 `cargo fmt --check` — rustfmt clean.
-  - [ ] T7.3 `cargo clippy --all-targets --all-features -- -D warnings`. Watch for:
+- [x] **T7. Local CI mirror** (AC: all)
+  - [x] T7.1 `cargo build` — all new modules compile; `tokio::process`, `reqwest`, `nix`, `thiserror` types all resolve.
+  - [x] T7.2 `cargo fmt --check` — rustfmt clean.
+  - [x] T7.3 `cargo clippy --all-targets --all-features -- -D warnings`. Watch for:
     - `missing_docs` on every `pub` item in `src/scan.rs` and `src/scan/server_lifecycle.rs`.
     - `missing_errors_doc` on `LlamaServer::start` (returns `Result`).
     - `clippy::module_name_repetitions` on `ServerError`, `ServerHandle` — suppress with `#[allow(clippy::module_name_repetitions)]` if needed.
     - `clippy::default_trait_access` — use `Default::default()` or fully qualified syntax.
-  - [ ] T7.4 `cargo test` — all pre-existing tests continue to pass. The new `server_lifecycle` integration tests skip unless `LCRC_INTEGRATION_TEST_SERVER=1`.
-  - [ ] T7.5 Scope discipline: no other module spawns `llama-server` directly. Verify with:
+  - [x] T7.4 `cargo test` — all pre-existing tests continue to pass. The new `server_lifecycle` integration tests skip unless `LCRC_INTEGRATION_TEST_SERVER=1`.
+  - [x] T7.5 Scope discipline: no other module spawns `llama-server` directly. Verify with:
     ```bash
     git grep -nE 'Command::new\("llama' src/ tests/ | grep -v '^src/scan/server_lifecycle.rs:' | grep -v '^tests/server_lifecycle.rs:'
     ```
@@ -440,6 +440,31 @@ claude-sonnet-4-6[1m]
 
 ### Debug Log References
 
+- `Duration::from_secs(60)` → `Duration::from_mins(1)`: clippy `duration_suboptimal_units` lint required use of `from_mins`. Field made `pub(crate)` so the in-module test can compare against `Duration::from_mins(1)`.
+- Import ordering: rustfmt requires `{Signal, kill}` (alphabetical) not `{kill, Signal}`.
+- Nested `if let Ok` / `if status == OK` collapsed to `is_ok_and(|r| ...)` to satisfy both `clippy::collapsible_if` and rustfmt's block-expansion preference.
+- `#[allow(clippy::cast_possible_wrap)]` applied locally to `raw_pid as i32` casts (nix Pid API requires i32; PID values never exceed i32::MAX on Linux/macOS).
+- Integration tests: added `#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` file-level attribute; `tokio::join!` required binding `LlamaServer` launchers to named variables (temporaries dropped before future resolution).
+- `#[derive(Debug)]` added to `ServerHandle` (`tokio::process::Child` implements `Debug`); required for `{result:?}` format in integration test assert messages.
+
 ### Completion Notes List
 
+- Implemented `src/scan.rs` (module root) and `src/scan/server_lifecycle.rs` with `Params`, `ServerError`, `LlamaServer`, `ServerHandle`, `allocate_free_port`, and `wait_for_ready`.
+- `LlamaServer::start` spawns `llama-server` on a dynamically allocated port, polls `/health` with 500 ms interval and 1 s per-request timeout, and kills any orphan on failure (AC1, AC3, AC4).
+- `ServerHandle::drop` sends SIGTERM then SIGKILL (500 ms apart) via `nix::sys::signal::kill` (AC2).
+- 4 unit tests cover: `ServerError` display, `Params` construction, concurrent port uniqueness, and 60 s default timeout.
+- 5 integration tests (1 ignored) cover AC1–AC5; all gate on `LCRC_INTEGRATION_TEST_SERVER=1`.
+- All 132 existing tests pass; 2 ignored (server_lifecycle integration + server_startup_timeout_kills_process).
+- `cargo build`, `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings` all clean.
+- Scope discipline verified: zero matches for `Command::new("llama` outside the two designated files.
+
 ### File List
+
+- `src/scan.rs` (new)
+- `src/scan/server_lifecycle.rs` (new)
+- `src/lib.rs` (modified — added `pub mod scan;`)
+- `tests/server_lifecycle.rs` (new)
+
+### Change Log
+
+- 2026-05-07: Story 1.11 implemented — `LlamaServer` lifecycle API (`start`, health-gate, `Drop`-based teardown), unit + integration tests, CI checks all green.

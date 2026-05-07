@@ -10,6 +10,7 @@ pub mod exit_code;
 pub mod machine;
 pub mod output;
 pub mod sandbox;
+pub mod scan;
 pub mod util;
 pub mod version;
 
