@@ -67,7 +67,7 @@ development_status:
   1-7-sqlite-schema-migrations-framework: done
   1-8-cache-cell-write-read-api-with-atomic-semantics: done
   1-9-container-runtime-preflight-with-socket-precedence-chain: done
-  1-10-sandbox-run-task-with-workspace-mount-custom-default-deny-network: ready-for-dev
+  1-10-sandbox-run-task-with-workspace-mount-custom-default-deny-network: review
   1-11-llama-server-lifecycle: backlog
   1-12-end-to-end-one-cell-scan-no-html-yet: backlog
   1-13-one-row-html-report-rendering: backlog

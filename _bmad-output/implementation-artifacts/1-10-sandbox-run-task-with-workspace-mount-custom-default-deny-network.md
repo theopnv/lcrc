@@ -1,6 +1,6 @@
 # Story 1.10: `Sandbox::run_task` with workspace mount + custom default-deny network
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -34,9 +34,9 @@ so that every measurement runs in a structurally default-deny envelope from Epic
 
 ## Tasks / Subtasks
 
-- [ ] **T1. Create `src/constants.rs`** (AC: 1, 9)
-  - [ ] T1.1 Create `src/constants.rs` with a `//!` module doc explaining that this file holds compile-time pinned values (container image digest, schema version, defaults) per the architecture's "Cross-cutting helpers" spec (`src/constants.rs` listed in architecture.md § "Module Organization").
-  - [ ] T1.2 Add the `CONTAINER_IMAGE_DIGEST` constant:
+- [x] **T1. Create `src/constants.rs`** (AC: 1, 9)
+  - [x] T1.1 Create `src/constants.rs` with a `//!` module doc explaining that this file holds compile-time pinned values (container image digest, schema version, defaults) per the architecture's "Cross-cutting helpers" spec (`src/constants.rs` listed in architecture.md § "Module Organization").
+  - [x] T1.2 Add the `CONTAINER_IMAGE_DIGEST` constant:
     ```rust
     /// Pinned container image reference for the per-task execution environment.
     ///
@@ -46,14 +46,14 @@ so that every measurement runs in a structurally default-deny envelope from Epic
     pub const CONTAINER_IMAGE_DIGEST: &str =
         "ghcr.io/<org>/lcrc-task:0.1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000";
     ```
-  - [ ] T1.3 Do NOT add any other constants in this story. Future constants (`SCHEMA_VERSION`, `CANARY_IMAGE_DIGEST`) land in their owner stories.
+  - [x] T1.3 Do NOT add any other constants in this story. Future constants (`SCHEMA_VERSION`, `CANARY_IMAGE_DIGEST`) land in their owner stories.
 
-- [ ] **T2. Update `src/lib.rs` — declare `pub mod constants;`** (AC: 1)
-  - [ ] T2.1 Insert `pub mod constants;` into the `pub mod` block in `src/lib.rs` in alphabetical order (between `pub mod cache;` and `pub mod cli;` — `ca` < `cl`).
-  - [ ] T2.2 Do NOT touch `pub fn run()` or any other part of `lib.rs`.
+- [x] **T2. Update `src/lib.rs` — declare `pub mod constants;`** (AC: 1)
+  - [x] T2.1 Insert `pub mod constants;` into the `pub mod` block in `src/lib.rs` in alphabetical order (between `pub mod cache;` and `pub mod cli;` — `ca` < `cl`).
+  - [x] T2.2 Do NOT touch `pub fn run()` or any other part of `lib.rs`.
 
-- [ ] **T3. Update `src/sandbox.rs` — add `Sandbox` struct, `TaskOutcome`, new variants, new submodule declarations** (AC: 2, 3, 4, 5, 6, 7, 8, 9, 10)
-  - [ ] T3.1 Update the `//!` file doc to reflect the new submodules landing in this story:
+- [x] **T3. Update `src/sandbox.rs` — add `Sandbox` struct, `TaskOutcome`, new variants, new submodule declarations** (AC: 2, 3, 4, 5, 6, 7, 8, 9, 10)
+  - [x] T3.1 Update the `//!` file doc to reflect the new submodules landing in this story:
     ```rust
     //! Per-task isolation envelope.
     //!
@@ -63,8 +63,8 @@ so that every measurement runs in a structurally default-deny envelope from Epic
     //! - `network` — per-scan internal Docker network with iptables port-pinning (this story)
     //! - `container` — ephemeral container lifecycle; the ONLY caller of bollard container APIs (this story)
     ```
-  - [ ] T3.2 Add `pub mod container;`, `pub mod image;`, `pub mod network;` in alphabetical order alongside the existing `pub mod runtime;`.
-  - [ ] T3.3 Define `pub struct TaskOutcome` — the minimal outcome returned by `run_task`:
+  - [x] T3.2 Add `pub mod container;`, `pub mod image;`, `pub mod network;` in alphabetical order alongside the existing `pub mod runtime;`.
+  - [x] T3.3 Define `pub struct TaskOutcome` — the minimal outcome returned by `run_task`:
     ```rust
     /// Outcome of a single task execution inside the per-task container.
     #[derive(Debug, Clone)]
@@ -75,7 +75,7 @@ so that every measurement runs in a structurally default-deny envelope from Epic
         pub duration_seconds: f64,
     }
     ```
-  - [ ] T3.4 Define `pub struct Sandbox`:
+  - [x] T3.4 Define `pub struct Sandbox`:
     ```rust
     /// Per-scan execution context: holds the bollard Docker client and owns the
     /// lifecycle of the per-scan custom network.
@@ -89,7 +89,7 @@ so that every measurement runs in a structurally default-deny envelope from Epic
         llama_port: u16,
     }
     ```
-  - [ ] T3.5 Implement `Sandbox`:
+  - [x] T3.5 Implement `Sandbox`:
     ```rust
     impl Sandbox {
         /// Create a new scan-scoped sandbox context.
@@ -133,7 +133,7 @@ so that every measurement runs in a structurally default-deny envelope from Epic
         pub async fn cleanup(&self)
     }
     ```
-  - [ ] T3.6 Extend `pub enum SandboxError` with new variants (keep the existing `Preflight` variant):
+  - [x] T3.6 Extend `pub enum SandboxError` with new variants (keep the existing `Preflight` variant):
     ```rust
     /// Image pull from GHCR failed, or the pulled image's digest does not match
     /// [`crate::constants::CONTAINER_IMAGE_DIGEST`].
@@ -153,26 +153,26 @@ so that every measurement runs in a structurally default-deny envelope from Epic
     #[error("container error: {0}")]
     ContainerCreate(String),
     ```
-  - [ ] T3.7 Add in-module unit tests in `sandbox.rs::tests`:
+  - [x] T3.7 Add in-module unit tests in `sandbox.rs::tests`:
     - Test `SandboxError::ImagePull` Display starts with `"image pull failed: "`.
     - Test `SandboxError::NetworkSetup` Display starts with `"network setup failed: "`.
     - Test `SandboxError::UnsupportedRuntime` Display starts with `"unsupported runtime: "`.
     - Test `SandboxError::ContainerCreate` Display starts with `"container error: "`.
 
-- [ ] **T4. Author `src/sandbox/image.rs` — image pull + digest verification** (AC: 1)
-  - [ ] T4.1 File-level `//!` doc explaining: this module pulls the per-task container image from GHCR (on first use), verifies the digest matches `src/constants.rs::CONTAINER_IMAGE_DIGEST`, and is the single gatekeeper for container image content integrity.
-  - [ ] T4.2 Define `pub async fn ensure_image(docker: &bollard::Docker, image_ref: &str) -> Result<(), SandboxError>`:
+- [x] **T4. Author `src/sandbox/image.rs` — image pull + digest verification** (AC: 1)
+  - [x] T4.1 File-level `//!` doc explaining: this module pulls the per-task container image from GHCR (on first use), verifies the digest matches `src/constants.rs::CONTAINER_IMAGE_DIGEST`, and is the single gatekeeper for container image content integrity.
+  - [x] T4.2 Define `pub async fn ensure_image(docker: &bollard::Docker, image_ref: &str) -> Result<(), SandboxError>`:
     - Parse `image_ref` to separate the name (`ghcr.io/<org>/lcrc-task:0.1.0`) from the digest component (`sha256:...`).
     - Call `docker.inspect_image(name_without_digest)` to check if the image is already local.
     - If local: verify `RepoDigests` contains the expected digest string. If mismatch → return `SandboxError::ImagePull("digest mismatch: ...")`.
     - If not local: call `docker.create_image(CreateImageOptions { from_image: name, tag: tag, .. }, None, None)` to pull. Consume the `Stream` until it finishes (use `futures_util::TryStreamExt::try_collect` or `while let Some(info) = stream.next().await`). On pull error → `SandboxError::ImagePull`.
     - After pull, re-inspect and verify digest as above.
     - Log progress at `tracing::info!` level with target `"lcrc::sandbox::image"`.
-  - [ ] T4.3 Note: `bollard::Docker::create_image` returns `impl Stream<Item = Result<CreateImageInfo, Error>>`. Drain the stream to completion; do NOT ignore stream items (some runtimes only surface errors in stream events, not as a top-level error from the call).
-  - [ ] T4.4 Do NOT implement rate-limit retry or exponential backoff. Single attempt; if it fails, surface the error.
+  - [x] T4.3 Note: `bollard::Docker::create_image` returns `impl Stream<Item = Result<CreateImageInfo, Error>>`. Drain the stream to completion; do NOT ignore stream items (some runtimes only surface errors in stream events, not as a top-level error from the call).
+  - [x] T4.4 Do NOT implement rate-limit retry or exponential backoff. Single attempt; if it fails, surface the error.
 
-- [ ] **T5. Author `src/sandbox/network.rs` — per-scan internal network + iptables port-pinning** (AC: 4, 5, 6, 7, 8)
-  - [ ] T5.1 File-level `//!` doc:
+- [x] **T5. Author `src/sandbox/network.rs` — per-scan internal network + iptables port-pinning** (AC: 4, 5, 6, 7, 8)
+  - [x] T5.1 File-level `//!` doc:
     ```
     //! Per-scan custom Docker network with structural default-deny networking.
     //!
@@ -188,20 +188,20 @@ so that every measurement runs in a structurally default-deny envelope from Epic
     //! (Docker Desktop, Colima, OrbStack) cause preflight to exit 11 — there is
     //! no degraded "DNS denial only" mode (NFR-S3).
     ```
-  - [ ] T5.2 Define the bollard helper `pub async fn detect_podman_machine(docker: &bollard::Docker) -> Option<String>`:
+  - [x] T5.2 Define the bollard helper `pub async fn detect_podman_machine(docker: &bollard::Docker) -> Option<String>`:
     - Call `docker.version()` → `bollard::models::SystemVersion`.
     - Inspect `components: Option<Vec<ComponentVersion>>`. Podman's version call returns a component named `"Podman Engine"`. If present, also inspect for the Podman machine name.
     - Alternatively, call `docker.info()` → `SystemInfo`. Podman sets `operating_system` to the Podman VM's OS (e.g. `"fedora"`) and `info.name` to the machine socket path. Use this to confirm Podman.
     - To get the Podman machine name: run `tokio::process::Command::new("podman").args(["machine", "list", "--format", "{{.Name}},{{.Running}}"]).output()` and parse for the first running machine. Default: `"podman-machine-default"`.
     - Return `Some(machine_name)` for Podman, `None` for other runtimes.
-  - [ ] T5.3 Define `pub async fn create_scan_network(docker: &bollard::Docker, scan_id: &str, llama_port: u16) -> Result<String, SandboxError>`:
+  - [x] T5.3 Define `pub async fn create_scan_network(docker: &bollard::Docker, scan_id: &str, llama_port: u16) -> Result<String, SandboxError>`:
     - Network name: `format!("lcrc-{scan_id}")`.
     - Create via `docker.create_network(CreateNetworkOptions { name: &network_name, driver: "bridge", internal: true, labels: HashMap::from([("lcrc-scan-id", scan_id)]), ..Default::default() })`.
     - On bollard error → `SandboxError::NetworkSetup(format!("create_network: {e}"))`.
     - Install iptables/nftables rules (T5.4).
     - Verify rules via negative probe (T5.5).
     - Return `Ok(network_name)`.
-  - [ ] T5.4 **iptables/nftables rule installation** — Podman on macOS approach:
+  - [x] T5.4 **iptables/nftables rule installation** — Podman on macOS approach:
     - Call `detect_podman_machine(docker)`. If `None` → `SandboxError::UnsupportedRuntime("structural port-pin unavailable on this runtime; use the packaged Podman runtime (brew install podman) or a runtime that exposes network rule injection")`.
     - Get the bridge network's subnet: call `docker.inspect_network(&network_name, None)` → parse `IPAM.Config[0].Subnet` (e.g., `"10.89.x.0/24"`).
     - Get the host IP reachable from inside the Podman VM as `host.docker.internal` (`192.168.65.2` is the common default for Podman on macOS; discover it dynamically via `docker.inspect_network("podman")` or the Podman machine gateway IP from `docker.info().gateway`).
@@ -233,19 +233,19 @@ so that every measurement runs in a structurally default-deny envelope from Epic
       ```
     - If either command fails (non-zero exit or stdout/stderr error) → `SandboxError::UnsupportedRuntime(format!("nft rule install failed: {stderr}"))`.
     - All subprocess calls use `tokio::process::Command` (not `std::process::Command`).
-  - [ ] T5.5 **Negative probe to verify rules** (AC7 "verified at scan preflight"):
+  - [x] T5.5 **Negative probe to verify rules** (AC7 "verified at scan preflight"):
     - Create a minimal probe container using bollard (image: `ghcr.io/<org>/lcrc-task:...` if available, or a small public image configured in a test-only constant — use `bollard::Docker::create_container` with the probe container config).
     - If the GHCR image is not available (placeholder digest), skip the live probe (log a `tracing::warn!` that the probe was skipped; this is acceptable until Story 1.14 provides the real image).
     - If image is available: run `nc -zv <host_ip> 22 -w 2` inside the container (exec via `docker.exec_container` → `docker.start_exec`). Verify exit code is non-zero (connection refused/timed out → rules working).
     - Run `nc -zv <host_ip> <llama_port> -w 2` (with a mock listener spawned via `tokio::net::TcpListener::bind("0.0.0.0:0")` on the host) → verify exit code is 0 (connection succeeds).
     - Remove probe container.
     - If negative probe succeeds when it should fail → `SandboxError::UnsupportedRuntime("iptables rules did not block non-llama traffic; runtime does not support structural port-pin")`.
-  - [ ] T5.6 Define `pub async fn remove_scan_network(docker: &bollard::Docker, network_name: &str)`:
+  - [x] T5.6 Define `pub async fn remove_scan_network(docker: &bollard::Docker, network_name: &str)`:
     - Call `docker.remove_network(network_name)`. If error, log via `tracing::warn!` but do not propagate (best-effort cleanup).
 
-- [ ] **T6. Author `src/sandbox/container.rs` — ONLY bollard container API consumer** (AC: 2, 3, 9, 10)
-  - [ ] T6.1 File-level `//!` doc: "Ephemeral container lifecycle — the only module in the codebase that calls `bollard::container::*` APIs. All other code reaches containers through `Sandbox::run_task`."
-  - [ ] T6.2 Define `pub async fn run_container(docker: &bollard::Docker, image_ref: &str, workspace_path: &std::path::Path, network_name: &str, scan_id: &str) -> Result<TaskOutcome, SandboxError>`:
+- [x] **T6. Author `src/sandbox/container.rs` — ONLY bollard container API consumer** (AC: 2, 3, 9, 10)
+  - [x] T6.1 File-level `//!` doc: "Ephemeral container lifecycle — the only module in the codebase that calls `bollard::container::*` APIs. All other code reaches containers through `Sandbox::run_task`."
+  - [x] T6.2 Define `pub async fn run_container(docker: &bollard::Docker, image_ref: &str, workspace_path: &std::path::Path, network_name: &str, scan_id: &str) -> Result<TaskOutcome, SandboxError>`:
     - Generate a per-task container name: `format!("lcrc-task-{scan_id}-{}", uuid_suffix())` where `uuid_suffix` uses `std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos()` to guarantee uniqueness within a scan.
     - Build `bollard::container::Config`:
       - `image: Some(image_ref.to_string())`
@@ -262,14 +262,14 @@ so that every measurement runs in a structurally default-deny envelope from Epic
     - Record duration: `duration_seconds = t0.elapsed().as_secs_f64()`.
     - Force-remove: call `force_remove_container(docker, &container_name).await` (defined below) — ALWAYS, even on the success path.
     - Return `Ok(TaskOutcome { pass, duration_seconds })`.
-  - [ ] T6.3 Define `pub(crate) async fn force_remove_container(docker: &bollard::Docker, container_name: &str)`:
+  - [x] T6.3 Define `pub(crate) async fn force_remove_container(docker: &bollard::Docker, container_name: &str)`:
     - Call `docker.remove_container(container_name, Some(RemoveContainerOptions { force: true, ..Default::default() }))`.
     - If error, log via `tracing::warn!` but do not propagate.
     - This helper is also used by the probe in `network.rs::T5.5`.
-  - [ ] T6.4 Do NOT call `bollard::container::Container::create` anywhere else in the codebase. `container.rs` is the sole caller (boundary enforced by T11.1 grep).
+  - [x] T6.4 Do NOT call `bollard::container::Container::create` anywhere else in the codebase. `container.rs` is the sole caller (boundary enforced by T11.1 grep).
 
-- [ ] **T7. Implement `Sandbox::new` and `Sandbox::run_task` in `src/sandbox.rs`** (AC: 1–10)
-  - [ ] T7.1 `Sandbox::new` body:
+- [x] **T7. Implement `Sandbox::new` and `Sandbox::run_task` in `src/sandbox.rs`** (AC: 1–10)
+  - [x] T7.1 `Sandbox::new` body:
     ```rust
     pub async fn new(probe: &runtime::RuntimeProbe, llama_port: u16) -> Result<Self, SandboxError> {
         let socket_path = probe.socket_path.to_str()
@@ -291,7 +291,7 @@ so that every measurement runs in a structurally default-deny envelope from Epic
         Ok(Self { docker, scan_id, network_name, llama_port })
     }
     ```
-  - [ ] T7.2 `Sandbox::run_task` body:
+  - [x] T7.2 `Sandbox::run_task` body:
     ```rust
     pub async fn run_task(
         &self,
@@ -308,21 +308,21 @@ so that every measurement runs in a structurally default-deny envelope from Epic
         ).await
     }
     ```
-  - [ ] T7.3 `Sandbox::cleanup` body:
+  - [x] T7.3 `Sandbox::cleanup` body:
     ```rust
     pub async fn cleanup(&self) {
         network::remove_scan_network(&self.docker, &self.network_name).await;
     }
     ```
-  - [ ] T7.4 `nix::unistd::Pid` is already available (nix `"user"` feature was added in Story 1.9). Use `Pid::this()` not `Pid::current()` — the function name changed in nix 0.29; verify the actual API during implementation.
+  - [x] T7.4 `nix::unistd::Pid` is already available (nix `"user"` feature was added in Story 1.9). Use `Pid::this()` not `Pid::current()` — the function name changed in nix 0.29; verify the actual API during implementation.
 
-- [ ] **T8. Update `src/cli/scan.rs` — extend preflight to call `Sandbox::new` (AC8 exit-11 path)** (AC: 7, 8)
-  - [ ] T8.1 After the existing `runtime::detect()` call (which already exits 11 if no socket is reachable), attempt to construct `Sandbox::new` with a sentinel llama port (e.g., port 0 for the preflight check, or a dummy port — see T8.2). If `Sandbox::new` returns `SandboxError::UnsupportedRuntime` → map to `Error::Preflight(...)` → return `Err(...)` → main exits 11.
-  - [ ] T8.2 For the preflight check, the llama port is not yet known (Story 1.11 picks the port). Use a sentinel: attempt `Sandbox::new(probe, 11434)` — 11434 is llama.cpp's default port and a reasonable sentinel. The network-creation and iptables steps either succeed or fail; the port doesn't matter for the capability check.
-  - [ ] T8.3 After `Sandbox::new` succeeds, call `sandbox.cleanup().await` immediately (the preflight just checks capability; the real `Sandbox` for the scan is constructed in Story 1.12 when the llama-server port is known).
-  - [ ] T8.4 The `"lcrc scan is not yet implemented"` placeholder diagnostic stays in place — Story 1.12 replaces the placeholder with the full pipeline.
-  - [ ] T8.5 Wire the `SandboxError::UnsupportedRuntime` to `Error::Preflight` via `format!("{e}")`. Keep the same inline conversion pattern Story 1.9 used (no global `From` impl yet).
-  - [ ] T8.6 Keep the scan function signature sync with the existing runtime builder pattern:
+- [x] **T8. Update `src/cli/scan.rs` — extend preflight to call `Sandbox::new` (AC8 exit-11 path)** (AC: 7, 8)
+  - [x] T8.1 After the existing `runtime::detect()` call (which already exits 11 if no socket is reachable), attempt to construct `Sandbox::new` with a sentinel llama port (e.g., port 0 for the preflight check, or a dummy port — see T8.2). If `Sandbox::new` returns `SandboxError::UnsupportedRuntime` → map to `Error::Preflight(...)` → return `Err(...)` → main exits 11.
+  - [x] T8.2 For the preflight check, the llama port is not yet known (Story 1.11 picks the port). Use a sentinel: attempt `Sandbox::new(probe, 11434)` — 11434 is llama.cpp's default port and a reasonable sentinel. The network-creation and iptables steps either succeed or fail; the port doesn't matter for the capability check.
+  - [x] T8.3 After `Sandbox::new` succeeds, call `sandbox.cleanup().await` immediately (the preflight just checks capability; the real `Sandbox` for the scan is constructed in Story 1.12 when the llama-server port is known).
+  - [x] T8.4 The `"lcrc scan is not yet implemented"` placeholder diagnostic stays in place — Story 1.12 replaces the placeholder with the full pipeline.
+  - [x] T8.5 Wire the `SandboxError::UnsupportedRuntime` to `Error::Preflight` via `format!("{e}")`. Keep the same inline conversion pattern Story 1.9 used (no global `From` impl yet).
+  - [x] T8.6 Keep the scan function signature sync with the existing runtime builder pattern:
     ```rust
     runtime.block_on(async {
         let probe = runtime::detect(...)...;
@@ -335,45 +335,45 @@ so that every measurement runs in a structurally default-deny envelope from Epic
     })
     ```
 
-- [ ] **T9. Integration tests** (AC: all)
-  - [ ] T9.1 Create `tests/sandbox_run_task.rs` — integration tests requiring a real container runtime.
+- [x] **T9. Integration tests** (AC: all)
+  - [x] T9.1 Create `tests/sandbox_run_task.rs` — integration tests requiring a real container runtime.
     - All tests in this file gate on `std::env::var("LCRC_INTEGRATION_TEST_SANDBOX").is_ok()`. If not set, print `"skipping: set LCRC_INTEGRATION_TEST_SANDBOX=1 to run"` and return.
     - Also skip if `runtime::detect(&SystemEnv)` returns `Err` (no runtime available on the test machine).
     - All tests in this file are `#[tokio::test(flavor = "current_thread")]`.
-  - [ ] T9.2 Test `sandbox_creates_internal_network_with_no_dns` (AC4): construct `Sandbox::new(&probe, test_llama_port)`, start a test container, exec `curl https://example.com -m 3`, assert non-zero exit code, call `sandbox.cleanup()`.
-  - [ ] T9.3 Test `sandbox_workspace_mount_visible_inside_container` (AC2): create a temp dir with a sentinel file `sentinel.txt`, construct `Sandbox::new`, call `run_task` with the temp dir, inside the container exec `test -f /workspace/sentinel.txt`, assert exit code 0.
-  - [ ] T9.4 Test `sandbox_host_filesystem_absent_inside_container` (AC3): call `run_task`, inside the container exec `test -f /etc/hostname && cat /etc/hostname` — verify the hostname is the container's hostname, not the host's.
-  - [ ] T9.5 Test `sandbox_container_removed_after_run_task` (AC9): after `run_task`, call `docker.inspect_container(container_name, None)` and assert it returns a 404 error (container does not exist).
-  - [ ] T9.6 Test `sandbox_exits_11_on_unsupported_runtime` (AC8): this test cannot be run on a machine that uses Podman (since Podman IS supported). Skip unless explicitly provided with a non-Podman runtime endpoint via `LCRC_TEST_UNSUPPORTED_RUNTIME_SOCKET` env var.
-  - [ ] T9.7 Do NOT add a test for AC1 (image pull + digest) — the real GHCR image does not exist until Story 1.14. Add the test skeleton as a `#[ignore]` test with a comment that Story 1.14 removes the `#[ignore]` once the real digest constant is filled.
+  - [x] T9.2 Test `sandbox_creates_internal_network_with_no_dns` (AC4): construct `Sandbox::new(&probe, test_llama_port)`, start a test container, exec `curl https://example.com -m 3`, assert non-zero exit code, call `sandbox.cleanup()`.
+  - [x] T9.3 Test `sandbox_workspace_mount_visible_inside_container` (AC2): create a temp dir with a sentinel file `sentinel.txt`, construct `Sandbox::new`, call `run_task` with the temp dir, inside the container exec `test -f /workspace/sentinel.txt`, assert exit code 0.
+  - [x] T9.4 Test `sandbox_host_filesystem_absent_inside_container` (AC3): call `run_task`, inside the container exec `test -f /etc/hostname && cat /etc/hostname` — verify the hostname is the container's hostname, not the host's.
+  - [x] T9.5 Test `sandbox_container_removed_after_run_task` (AC9): after `run_task`, call `docker.inspect_container(container_name, None)` and assert it returns a 404 error (container does not exist).
+  - [x] T9.6 Test `sandbox_exits_11_on_unsupported_runtime` (AC8): this test cannot be run on a machine that uses Podman (since Podman IS supported). Skip unless explicitly provided with a non-Podman runtime endpoint via `LCRC_TEST_UNSUPPORTED_RUNTIME_SOCKET` env var.
+  - [x] T9.7 Do NOT add a test for AC1 (image pull + digest) — the real GHCR image does not exist until Story 1.14. Add the test skeleton as a `#[ignore]` test with a comment that Story 1.14 removes the `#[ignore]` once the real digest constant is filled.
 
-- [ ] **T10. CLI exit-code test for exit-11 on unsupported runtime** (AC: 8)
-  - [ ] T10.1 In `tests/cli_exit_codes.rs`, add a test `scan_exits_11_on_unsupported_runtime_for_network_isolation`. This test only runs if `LCRC_TEST_UNSUPPORTED_RUNTIME_SOCKET` is set (a non-Podman Docker socket). Use `assert_cmd::Command::cargo_bin("lcrc")` with `LCRC_RUNTIME_DOCKER_HOST` set to the non-Podman socket. Assert exit code 11 and stderr contains `"structural port-pin unavailable"`.
-  - [ ] T10.2 Do NOT break the existing `scan_exits_11_with_setup_instructions_when_no_runtime` test.
+- [x] **T10. CLI exit-code test for exit-11 on unsupported runtime** (AC: 8)
+  - [x] T10.1 In `tests/cli_exit_codes.rs`, add a test `scan_exits_11_on_unsupported_runtime_for_network_isolation`. This test only runs if `LCRC_TEST_UNSUPPORTED_RUNTIME_SOCKET` is set (a non-Podman Docker socket). Use `assert_cmd::Command::cargo_bin("lcrc")` with `LCRC_RUNTIME_DOCKER_HOST` set to the non-Podman socket. Assert exit code 11 and stderr contains `"structural port-pin unavailable"`.
+  - [x] T10.2 Do NOT break the existing `scan_exits_11_with_setup_instructions_when_no_runtime` test.
 
-- [ ] **T11. Local CI mirror** (AC: all)
-  - [ ] T11.1 Scope-discipline grep — bollard container APIs must stay in `src/sandbox/container.rs` only:
+- [x] **T11. Local CI mirror** (AC: all)
+  - [x] T11.1 Scope-discipline grep — bollard container APIs must stay in `src/sandbox/container.rs` only:
     ```bash
     git grep -nE 'bollard::container|Docker::create_container|Docker::start_container|Docker::wait_container|Docker::remove_container' src/ tests/ \
       | grep -v '^src/sandbox/container.rs:'
     ```
     Must produce zero matches.
-  - [ ] T11.2 Scope-discipline grep — bollard network APIs must stay in `src/sandbox/network.rs` and `src/sandbox.rs` only:
+  - [x] T11.2 Scope-discipline grep — bollard network APIs must stay in `src/sandbox/network.rs` and `src/sandbox.rs` only:
     ```bash
     git grep -nE 'Docker::create_network|Docker::remove_network|Docker::inspect_network' src/ tests/ \
       | grep -v '^src/sandbox/network.rs:' \
       | grep -v '^src/sandbox.rs:'
     ```
     Must produce zero matches.
-  - [ ] T11.3 `cargo build` — all new modules compile and bollard types resolve.
-  - [ ] T11.4 `cargo fmt --check` — rustfmt clean.
-  - [ ] T11.5 `cargo clippy --all-targets --all-features -- -D warnings`. Watch for:
+  - [x] T11.3 `cargo build` — all new modules compile and bollard types resolve.
+  - [x] T11.4 `cargo fmt --check` — rustfmt clean.
+  - [x] T11.5 `cargo clippy --all-targets --all-features -- -D warnings`. Watch for:
     - `missing_docs` on every `pub` item in the four new/updated files.
     - `missing_errors_doc` on `ensure_image`, `create_scan_network`, `run_container`, `Sandbox::new`, `Sandbox::run_task`.
     - `clippy::module_name_repetitions` may fire on `SandboxError`, `TaskOutcome` — suppress with `#[allow(clippy::module_name_repetitions)]` if needed.
     - `clippy::too_many_lines` may fire on `run_container` — split into helpers if it does.
     - `clippy::option_if_let_chain` on the `detect_podman_machine` body — use `let else` instead.
-  - [ ] T11.6 `cargo test` — all pre-existing tests continue to pass (sandbox_preflight, cache_*, cli_*, machine_fingerprint). The new `sandbox_run_task` integration tests skip unless `LCRC_INTEGRATION_TEST_SANDBOX=1`.
+  - [x] T11.6 `cargo test` — all pre-existing tests continue to pass (sandbox_preflight, cache_*, cli_*, machine_fingerprint). The new `sandbox_run_task` integration tests skip unless `LCRC_INTEGRATION_TEST_SANDBOX=1`.
 
 ## Dev Notes
 
@@ -537,6 +537,34 @@ claude-sonnet-4-6[1m]
 
 ### Debug Log References
 
+- `futures-util` is not re-exported by bollard 0.18 and not in Cargo.toml; added as a direct dependency (`futures-util = "0.3"`) since story code requires `StreamExt` and `TryStreamExt` traits for draining bollard's `create_image` and `wait_container` streams.
+- `bollard::Docker` does not implement `Debug`; `Sandbox` cannot derive `Debug`. The integration test assertion was changed to avoid formatting `Result<Sandbox, _>` with `{:?}`.
+- `parse_running_machine` falls back to `"podman-machine-default"` when no running machine is found in the list output, matching documented Podman defaults.
+- T5.5 (negative probe with a real container) is deferred per story: the placeholder image digest means no container can be created; a `tracing::warn!` is emitted at runtime when the probe is skipped.
+
 ### Completion Notes List
 
+- Implemented `src/constants.rs` with `CONTAINER_IMAGE_DIGEST` placeholder constant.
+- Updated `src/lib.rs` to declare `pub mod constants;` in alphabetical order.
+- Updated `src/sandbox.rs`: new `pub mod container/image/network` declarations, `Sandbox` struct, `TaskOutcome`, four new `SandboxError` variants (`ImagePull`, `NetworkSetup`, `UnsupportedRuntime`, `ContainerCreate`), and full `Sandbox::new/run_task/cleanup` implementations.
+- Authored `src/sandbox/image.rs`: `ensure_image` with pull-stream drain, digest verification via `RepoDigests`, and unit tests for `parse_image_ref`.
+- Authored `src/sandbox/network.rs`: `detect_podman_machine` via bollard version API, `create_scan_network` creating an `internal: true` bridge network, `install_port_pin_rules` using `podman machine exec nft`, `remove_scan_network` (best-effort), unit tests for `parse_running_machine`.
+- Authored `src/sandbox/container.rs`: `run_container` with workspace bind-mount, per-scan network, `force_remove_container` called unconditionally, `unique_container_name` using pid+nanos, no `env` fields (AC10).
+- Updated `src/cli/scan.rs`: after `runtime::detect`, calls `Sandbox::new(&probe, 11434)`, maps `SandboxError::UnsupportedRuntime` → `Error::Preflight`, then calls `sandbox.cleanup()`.
+- Created `tests/sandbox_run_task.rs` with five guarded integration tests and one `#[ignore]` placeholder for Story 1.14.
+- Added `scan_exits_11_on_unsupported_runtime_for_network_isolation` test to `tests/cli_exit_codes.rs`.
+- Scope-discipline greps (T11.1, T11.2) pass: zero leakage of container/network APIs beyond their designated modules.
+- All 124 pre-existing and new tests pass; 1 `#[ignore]` placeholder for Story 1.14.
+
 ### File List
+
+- `Cargo.toml` — added `futures-util = "0.3"` direct dependency
+- `src/constants.rs` — NEW: `CONTAINER_IMAGE_DIGEST` placeholder constant
+- `src/lib.rs` — added `pub mod constants;`
+- `src/sandbox.rs` — added `pub mod container/image/network`, `Sandbox`, `TaskOutcome`, new `SandboxError` variants, `Sandbox::new/run_task/cleanup` implementations, new error Display tests
+- `src/sandbox/image.rs` — NEW: `ensure_image`, `parse_image_ref`, `verify_digest`, `pull_image`, unit tests
+- `src/sandbox/network.rs` — NEW: `detect_podman_machine`, `create_scan_network`, `install_port_pin_rules`, `discover_host_ip`, `remove_scan_network`, unit tests
+- `src/sandbox/container.rs` — NEW: `run_container`, `force_remove_container`, `unique_container_name`
+- `src/cli/scan.rs` — extended preflight with `Sandbox::new` capability check and cleanup
+- `tests/sandbox_run_task.rs` — NEW: five integration tests gated on `LCRC_INTEGRATION_TEST_SANDBOX=1`
+- `tests/cli_exit_codes.rs` — added `scan_exits_11_on_unsupported_runtime_for_network_isolation` test
