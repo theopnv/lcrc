@@ -30,3 +30,42 @@ fn exit_code_enum_full_contract() {
     assert_eq!(ExitCode::PreflightFailed.as_i32(), 11);
     assert_eq!(ExitCode::ConcurrentScan.as_i32(), 12);
 }
+
+#[test]
+fn scan_exits_11_with_setup_instructions_when_no_runtime() {
+    if std::path::Path::new("/var/run/docker.sock").exists() {
+        eprintln!("skipping: /var/run/docker.sock exists on this machine");
+        return;
+    }
+    if std::env::var("DOCKER_HOST").is_ok() || std::env::var("LCRC_RUNTIME_DOCKER_HOST").is_ok() {
+        eprintln!("skipping: DOCKER_HOST or LCRC_RUNTIME_DOCKER_HOST set");
+        return;
+    }
+    let output = Command::cargo_bin("lcrc")
+        .unwrap()
+        .arg("scan")
+        .env_remove("DOCKER_HOST")
+        .env_remove("LCRC_RUNTIME_DOCKER_HOST")
+        .assert()
+        .code(ExitCode::PreflightFailed.as_i32())
+        .get_output()
+        .clone();
+    let stderr = String::from_utf8(output.stderr.clone()).unwrap();
+    assert!(
+        stderr.contains("brew install podman"),
+        "stderr missing `brew install podman`: {stderr}"
+    );
+    assert!(
+        stderr.contains("podman machine init"),
+        "stderr missing `podman machine init`: {stderr}"
+    );
+    assert!(
+        stderr.contains("podman machine start"),
+        "stderr missing `podman machine start`: {stderr}"
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "expected empty stdout, got: {:?}",
+        output.stdout
+    );
+}

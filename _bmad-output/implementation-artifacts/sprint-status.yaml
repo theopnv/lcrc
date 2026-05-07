@@ -11,6 +11,7 @@
 # (1-8-cache-cell-write-read-api-with-atomic-semantics: ready-for-dev → in-progress → review on 2026-05-07 via dev-story)
 # (1-8-cache-cell-write-read-api-with-atomic-semantics: review → done on 2026-05-07 after code review)
 # (1-9-container-runtime-preflight-with-socket-precedence-chain: backlog → ready-for-dev on 2026-05-07 via create-story)
+# (1-9-container-runtime-preflight-with-socket-precedence-chain: ready-for-dev → in-progress → review on 2026-05-07 via dev-story)
 # (last_updated reflects most recent story-status change)
 # project: lcrc
 # project_key: NOKEY
@@ -63,7 +64,7 @@ development_status:
   1-6-cache-key-helpers-in-src-cache-key-rs: done
   1-7-sqlite-schema-migrations-framework: done
   1-8-cache-cell-write-read-api-with-atomic-semantics: done
-  1-9-container-runtime-preflight-with-socket-precedence-chain: ready-for-dev
+  1-9-container-runtime-preflight-with-socket-precedence-chain: review
   1-10-sandbox-run-task-with-workspace-mount-custom-default-deny-network: backlog
   1-11-llama-server-lifecycle: backlog
   1-12-end-to-end-one-cell-scan-no-html-yet: backlog

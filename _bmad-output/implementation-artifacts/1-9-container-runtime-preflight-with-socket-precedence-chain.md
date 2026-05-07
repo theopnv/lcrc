@@ -1,6 +1,6 @@
 # Story 1.9: Container runtime preflight with socket precedence chain
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -26,15 +26,15 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
 
 ## Tasks / Subtasks
 
-- [ ] **T1. Update `src/lib.rs` — declare `pub mod sandbox;`** (AC: 1, 2, 3, 4, 5, 6)
-  - [ ] T1.1 Insert `pub mod sandbox;` into the existing `pub mod` block in `src/lib.rs:5-12` in alphabetical order (between `pub mod output;` and `pub mod util;` → resulting order: `cache`, `cli`, `error`, `exit_code`, `machine`, `output`, `sandbox`, `util`, `version`).
-  - [ ] T1.2 Do NOT touch the `pub fn run()` body. CLI dispatch stays where it is; the only `lib.rs` change in this story is the module declaration. Same rule Stories 1.5 / 1.6 / 1.7 / 1.8 followed.
-  - [ ] T1.3 Do NOT add re-exports (`pub use sandbox::runtime::detect;` etc.). Callers reach into the path explicitly: `lcrc::sandbox::runtime::detect(...)`. Re-export policy is an Epic 6 polish concern.
+- [x] **T1. Update `src/lib.rs` — declare `pub mod sandbox;`** (AC: 1, 2, 3, 4, 5, 6)
+  - [x] T1.1 Insert `pub mod sandbox;` into the existing `pub mod` block in `src/lib.rs:5-12` in alphabetical order (between `pub mod output;` and `pub mod util;` → resulting order: `cache`, `cli`, `error`, `exit_code`, `machine`, `output`, `sandbox`, `util`, `version`).
+  - [x] T1.2 Do NOT touch the `pub fn run()` body. CLI dispatch stays where it is; the only `lib.rs` change in this story is the module declaration. Same rule Stories 1.5 / 1.6 / 1.7 / 1.8 followed.
+  - [x] T1.3 Do NOT add re-exports (`pub use sandbox::runtime::detect;` etc.). Callers reach into the path explicitly: `lcrc::sandbox::runtime::detect(...)`. Re-export policy is an Epic 6 polish concern.
 
-- [ ] **T2. Author `src/sandbox.rs` — module-root file with doc + `SandboxError` parent enum** (AC: 1, 2, 5)
-  - [ ] T2.1 File-level `//!` doc that mirrors the architecture's two-level split (architecture.md § "Complete Project Directory Structure" lines 922-929): the `sandbox` module owns the per-task isolation envelope; submodules are `runtime` (this story — preflight detection of a reachable Docker-Engine-API-compatible socket per FR17a) plus future submodules (`container`, `network`, `env_allowlist`, `image`, `violation`) that land in their owner stories. List only the submodules that exist *now* (`runtime`); do not pre-list future submodules — same scope discipline Stories 1.7 / 1.8 used for `cache.rs`.
-  - [ ] T2.2 Declare `pub mod runtime;` (alphabetical-trivial — only one submodule in this story).
-  - [ ] T2.3 Define `pub enum SandboxError` as the **module-level** error type for sandbox concerns. Story 1.9 owns exactly one variant — `Preflight(#[from] runtime::PreflightError)`:
+- [x] **T2. Author `src/sandbox.rs` — module-root file with doc + `SandboxError` parent enum** (AC: 1, 2, 5)
+  - [x] T2.1 File-level `//!` doc that mirrors the architecture's two-level split (architecture.md § "Complete Project Directory Structure" lines 922-929): the `sandbox` module owns the per-task isolation envelope; submodules are `runtime` (this story — preflight detection of a reachable Docker-Engine-API-compatible socket per FR17a) plus future submodules (`container`, `network`, `env_allowlist`, `image`, `violation`) that land in their owner stories. List only the submodules that exist *now* (`runtime`); do not pre-list future submodules — same scope discipline Stories 1.7 / 1.8 used for `cache.rs`.
+  - [x] T2.2 Declare `pub mod runtime;` (alphabetical-trivial — only one submodule in this story).
+  - [x] T2.3 Define `pub enum SandboxError` as the **module-level** error type for sandbox concerns. Story 1.9 owns exactly one variant — `Preflight(#[from] runtime::PreflightError)`:
     ```rust
     /// Errors crossing the [`crate::sandbox`] module boundary.
     ///
@@ -54,8 +54,8 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     - **One variant only.** Other sandbox failures (`ContainerCreate`, `ImagePull`, `NetworkSetup`, `Violation`) land in their owner stories (1.10, 1.14, 2.7, 2.8). Pre-adding them creates dead surface area. Same rule Stories 1.5 / 1.6 / 1.7 / 1.8 followed for `MachineFingerprintError` / `KeyError` / `CacheError`.
     - **`#[from]`** auto-derives the `From<runtime::PreflightError> for SandboxError` impl so `?` works inside future callers without manual wrapping.
     - **Display string starts with `"preflight failed: "`.** The format mirrors `error::Error::Preflight`'s rendering pattern (`src/error.rs:21-22`) so when this error eventually flows through `Error::Preflight(String)` (Story 1.12 wires the boundary), the user sees one consistent prefix — not double-prefixed `"preflight failed: preflight failed: ..."`. The wrapping at the consumer (Story 1.12) will be `Error::Preflight(format!("{sandbox_err}"))` — i.e. the `Display` of `SandboxError::Preflight(...)` *already* contains the `"preflight failed: "` prefix from this Display, so the consumer formats with `{sandbox_err}` not `format!("preflight failed: {sandbox_err}")`. Documented here so the consumer story does not double-prefix.
-  - [ ] T2.4 Do NOT define `From<SandboxError> for crate::error::Error` in this story. Same rule Stories 1.5 / 1.6 / 1.7 / 1.8 followed: boundary mapping is the consumer's choice. Story 1.12 (the first end-to-end `lcrc scan` wiring) decides the conversion. **Exception:** see T5 — `cli/scan.rs` *is* updated in this story (the AC contract requires `lcrc scan` to exit 11), but it does the boundary conversion inline (`format!("{e}").into()` → `Error::Preflight`) rather than via a global `From` impl, so the `From` decision stays deferred.
-  - [ ] T2.5 In-module unit tests for `SandboxError` Display behavior:
+  - [x] T2.4 Do NOT define `From<SandboxError> for crate::error::Error` in this story. Same rule Stories 1.5 / 1.6 / 1.7 / 1.8 followed: boundary mapping is the consumer's choice. Story 1.12 (the first end-to-end `lcrc scan` wiring) decides the conversion. **Exception:** see T5 — `cli/scan.rs` *is* updated in this story (the AC contract requires `lcrc scan` to exit 11), but it does the boundary conversion inline (`format!("{e}").into()` → `Error::Preflight`) rather than via a global `From` impl, so the `From` decision stays deferred.
+  - [x] T2.5 In-module unit tests for `SandboxError` Display behavior:
     ```rust
     #[cfg(test)]
     #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -81,8 +81,8 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     - Pins the no-double-prefix invariant from T2.3.
     - Uses the `#[allow(...)]` attribute set the codebase already standardizes on (`src/cache.rs`, `src/cache/cell.rs`, `src/cache/migrations.rs` all repeat this exemption).
 
-- [ ] **T3. Author `src/sandbox/runtime.rs` — precedence chain + probe** (AC: 3, 4, 5)
-  - [ ] T3.1 File-level `//!` doc:
+- [x] **T3. Author `src/sandbox/runtime.rs` — precedence chain + probe** (AC: 3, 4, 5)
+  - [x] T3.1 File-level `//!` doc:
     ```text
     //! Container-runtime preflight (FR17a, NFR-S3).
     //!
@@ -101,7 +101,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     //! No `--unsafe-no-sandbox` fallback exists per NFR-S3 — the sandbox is
     //! structural or the scan refuses to run.
     ```
-  - [ ] T3.2 Define `pub enum PrecedenceLayer` — the four-variant enum naming each layer:
+  - [x] T3.2 Define `pub enum PrecedenceLayer` — the four-variant enum naming each layer:
     ```rust
     /// Identifies which layer of the precedence chain a probe attempt
     /// targeted. Variant order matches probe order.
@@ -135,7 +135,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     ```
     - **`Copy + Clone + PartialEq + Eq + Hash`**: pure tag-shaped enum, four nullary variants — derive everything cheap and useful. Tests that build expected-attempt lists construct these by value.
     - **`name()` returns `&'static str`**: stable snake_case identifiers used by structured tracing fields *and* by setup-instructions test assertions. Locked here so Display-template edits don't drift the field name silently.
-  - [ ] T3.3 Define `pub enum ProbeFailure` — the four reasons a single layer's probe can fail:
+  - [x] T3.3 Define `pub enum ProbeFailure` — the four reasons a single layer's probe can fail:
     ```rust
     /// Concrete failure mode for a single layer of the precedence chain.
     /// Variants are ordered by where the probe stopped: env-resolution
@@ -170,7 +170,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     - **Four variants, no more, no less.** Discriminating between "socket missing" and "connect failed" is what lets the diagnostic tell the user whether they need to *install* a runtime or *start* one. Combining them into a single "Unreachable" variant would lose that signal.
     - **`#[source]` on the inner errors** preserves the cause chain for `tracing`'s `?error` instrumentation. The Display rendering shows the source's Display message (`{source}`) — already user-friendly for `std::io::Error` and `bollard::errors::Error`.
     - **`bollard::errors::Error` typed dependency** comes via Cargo.toml line 42 — `bollard = "0.18"`; no new dep.
-  - [ ] T3.4 Define `pub struct ProbeAttempt`:
+  - [x] T3.4 Define `pub struct ProbeAttempt`:
     ```rust
     /// Per-layer record of a probe attempt. One [`ProbeAttempt`] is recorded
     /// per layer in the precedence chain, even on the layer that ultimately
@@ -194,7 +194,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     - **Field order**: `source` first so log lines / Debug renderings group by layer. `socket_path` second (the *what* of the probe). `failure` last (the *why*).
     - **`socket_path` for `EnvVarUnset`**: `PathBuf::new()` (empty path). The Display template (T3.7) elides the path when `failure == EnvVarUnset` so the user sees `"LCRC_RUNTIME_DOCKER_HOST: env var unset"` and not `"LCRC_RUNTIME_DOCKER_HOST: env var unset (path: )"`. See Resolved decisions § "EnvVarUnset path representation".
     - **`Debug` derive only**, no `PartialEq` — `ProbeFailure::ConnectFailed { source: std::io::Error }` and `PingFailed { source: bollard::errors::Error }` carry inner errors that do not implement `Eq`. Tests that need to inspect attempts use `match` patterns + field-by-field assertions, not `assert_eq!(attempt, ...)`. Same pattern Story 1.5's `MachineFingerprint` decided for nullable diagnostic fields.
-  - [ ] T3.5 Define `pub struct RuntimeProbe`:
+  - [x] T3.5 Define `pub struct RuntimeProbe`:
     ```rust
     /// Result of a successful preflight probe. Contains the resolved socket
     /// path and which precedence-chain layer provided it. Future stories
@@ -210,7 +210,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     ```
     - **`Clone` derive**: `PathBuf` and `PrecedenceLayer` are both `Clone`. Cloning is cheap (one `Vec<u8>` clone, one `Copy`); future callers may want to keep a copy of the probe alongside passing one into a constructor.
     - **No `Display` impl on `RuntimeProbe`.** The success-path log line is built at the call site via `tracing::info!(socket_path = ?probe.socket_path, source = probe.source.name(), "detected container runtime")`, not via `RuntimeProbe::Display`. Putting Display on the value type would invite drift between the log-line copy and the success message; structured tracing fields are the canonical surface.
-  - [ ] T3.6 Define `pub enum PreflightError`:
+  - [x] T3.6 Define `pub enum PreflightError`:
     ```rust
     /// Errors returned by [`detect`].
     #[derive(Debug, thiserror::Error)]
@@ -228,7 +228,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     ```
     - **One variant only** — `NoRuntimeReachable`. Future preflight categories (`UnsupportedRuntime`, `NetworkRulesUnavailable` per Story 1.10) land in their owner story.
     - **Display via free function `format_no_runtime_reachable(&[ProbeAttempt]) -> String`.** Inline-formatting a multi-line message inside a `#[error("...")]` literal is unreadable; the free function is private to the module and emits the locked format. See T3.7.
-  - [ ] T3.7 Implement `pub(crate) fn format_no_runtime_reachable(attempts: &[ProbeAttempt]) -> String`. The locked output format (a single string with `\n`-separated lines that the consumer prints to stderr verbatim):
+  - [x] T3.7 Implement `pub(crate) fn format_no_runtime_reachable(attempts: &[ProbeAttempt]) -> String`. The locked output format (a single string with `\n`-separated lines that the consumer prints to stderr verbatim):
     ```text
     no container runtime reachable. lcrc tried (in order):
       1. LCRC_RUNTIME_DOCKER_HOST: <reason>
@@ -279,7 +279,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
       }
       ```
     - **Why `let _ = writeln!(...)`**: writes to a `String` are infallible — `String` implements `std::fmt::Write` infallibly. The `let _ =` discards the always-`Ok` result and dodges `clippy::unused_must_use` without an `unwrap` (forbidden) or `expect` (forbidden). Same pattern other modules use; if clippy still fires, switch to `s.write_fmt(format_args!(...)).ok();`.
-  - [ ] T3.8 Implement the env-source seam: `pub trait EnvSource: Send + Sync`:
+  - [x] T3.8 Implement the env-source seam: `pub trait EnvSource: Send + Sync`:
     ```rust
     /// Abstraction over the environment so tests can drive the precedence
     /// chain deterministically without mutating process-global state.
@@ -305,7 +305,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     - **Why a trait, not a function pointer or closure**: a trait with one method is the minimum-surface seam. Future preflight extensions (timeout, retry config) become trait methods or sibling traits. Closures lose this extensibility.
     - **`Send + Sync`**: the trait object will be passed across the tokio runtime boundary inside `detect`. No threading concern in v1 (the runtime is current-thread for now), but the bound is free to add and avoids a re-export later.
     - **Empty-string filter**: an empty env var (`DOCKER_HOST=`) is functionally indistinguishable from unset for our purposes. Documented above; same convention POSIX shell tools use.
-  - [ ] T3.9 Implement the candidate-list builder: `pub fn candidate_chain(env: &dyn EnvSource) -> Vec<(PrecedenceLayer, std::path::PathBuf, ProbeFailure)>`. **No** — actually, build a different shape. We need the resolved path AND knowledge that it came from an unset env. Refactor: `pub(crate) fn resolve_candidates(env: &dyn EnvSource) -> [Candidate; 4]` returning a fixed-size array. Each `Candidate` is:
+  - [x] T3.9 Implement the candidate-list builder: `pub fn candidate_chain(env: &dyn EnvSource) -> Vec<(PrecedenceLayer, std::path::PathBuf, ProbeFailure)>`. **No** — actually, build a different shape. We need the resolved path AND knowledge that it came from an unset env. Refactor: `pub(crate) fn resolve_candidates(env: &dyn EnvSource) -> [Candidate; 4]` returning a fixed-size array. Each `Candidate` is:
     ```rust
     /// Internal: a single layer's pre-resolution result. The `path` is
     /// `Some` when the layer produced a path (env var set, or hardcoded
@@ -345,7 +345,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
       ```
       Or use the borrow-then-allocate-once pattern (clippy-clean). Tests pin both inputs (`"/path"` → `"/path"`, `"unix:///path"` → `"/path"`).
     - **Fixed-size `[Candidate; 4]` array**: forces a compile-time guarantee that exactly four layers are probed, in this order. Adding a layer is a deliberate, type-level change. Same "exhaustive enum + fixed-array" guard pattern Stories 1.3's `ExitCode::variant_set_is_exhaustive` test uses for the enum variants.
-  - [ ] T3.10 Implement `pub(crate) fn podman_default_socket_path() -> std::path::PathBuf` — XDG-resolves the Podman per-uid socket:
+  - [x] T3.10 Implement `pub(crate) fn podman_default_socket_path() -> std::path::PathBuf` — XDG-resolves the Podman per-uid socket:
     - Order:
       1. `$XDG_RUNTIME_DIR/podman/podman.sock` if `XDG_RUNTIME_DIR` is set
       2. macOS fallback: `~/.local/share/containers/podman/machine/qemu/podman.sock` (the path Podman 4.x machine creates on macOS — verify against installed Podman during dev-story)
@@ -375,7 +375,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
       ```
     - **Direct `std::env::var_os` usage** is allowed here even though architecture.md § "Layered Config Loading" line 758 forbids `std::env::var` outside `config::`. The forbidden case is *config* env vars (`LCRC_*`); platform-discovery env vars (`XDG_RUNTIME_DIR`, `HOME`) are infrastructure-discovery, not user-tunable configuration. Same exemption Story 1.5 used for `sysctl` shell-out. **Exception is documented in the WHY-comment at the call site.**
     - **`nix::unistd::Uid::current()`** is the locked Cargo.toml dep (line 56 — `nix = { version = "0.29", features = ["signal"] }`). Verify the `signal` feature includes the `unistd` module; if not, **expand the feature set in Cargo.toml** to include `user` (the feature gate for `unistd::Uid` in nix 0.29). This is the one Cargo.toml change Story 1.9 may need; document the change in the Dev Notes File List.
-  - [ ] T3.11 Implement `async fn probe_one(candidate: &Candidate) -> Result<(), ProbeFailure>` — single-layer probe:
+  - [x] T3.11 Implement `async fn probe_one(candidate: &Candidate) -> Result<(), ProbeFailure>` — single-layer probe:
     1. If `candidate.path.is_none()` → `return Err(ProbeFailure::EnvVarUnset)`. (Path-based layers always have `Some(path)`; this branch only fires for unset env-backed layers.)
     2. `let path = candidate.path.as_ref().unwrap();` — the `unwrap` is correct because step 1 ruled out `None`. Wait — `unwrap_used` is `deny`. Use `let Some(path) = candidate.path.as_ref() else { return Err(ProbeFailure::EnvVarUnset); };` instead. The let-else pattern is stable since 1.65 and avoids the lint.
     3. Filesystem existence check: `if !tokio::fs::try_exists(path).await.unwrap_or(false) { return Err(ProbeFailure::SocketFileMissing); }`. (`unwrap_or(false)` is acceptable — it's a `Result::unwrap_or`, not `Option::unwrap` — and matches the conservative "if we can't tell, assume missing" semantics.)
@@ -395,7 +395,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
       }
       ```
       The `ConnectFailed` variant carries `std::io::Error` because the user-visible reason at this layer is "could not establish a Unix-socket connection to the runtime"; bollard's lower-level error chain is replayed via the `to_string()` call. Keeping `std::io::Error` rather than `bollard::errors::Error` for `ConnectFailed` lets the same variant cover both pre-bollard (`tokio::fs::try_exists` failure surfaces as `SocketFileMissing`) and bollard-layer connect failures uniformly.
-  - [ ] T3.12 Implement `pub async fn detect(env: &dyn EnvSource) -> Result<RuntimeProbe, PreflightError>`:
+  - [x] T3.12 Implement `pub async fn detect(env: &dyn EnvSource) -> Result<RuntimeProbe, PreflightError>`:
     ```rust
     /// Probe the four-layer precedence chain in order. Returns the first
     /// layer whose Unix socket accepts a Docker-Engine-API `/_ping`
@@ -436,7 +436,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     - **Returns at first success**: the loop's `return Ok(...)` short-circuits, leaving any remaining (un-probed) layers untouched. This is what AC4 verifies.
     - **`cand.path.unwrap_or_default()` on the `EnvVarUnset` failure path**: produces an empty `PathBuf`. The Display rendering (T3.7) elides the path on `EnvVarUnset` so the user does not see a misleading empty path. `unwrap_or_default()` is a `Option::unwrap_or_default`, not `Option::unwrap` — clippy-clean.
     - **`cand.path.unwrap_or_default()` on the success path**: cannot fire because a successful probe means `probe_one` got past the `EnvVarUnset` early-return → `path` was `Some`. The branch is defensive but unreachable in practice; chosen over `expect("path is Some on success path")` to keep the function `unwrap`/`expect`-free. A code-review-time `// SAFETY: probe_one returns Ok only when path was Some (see step 1)` comment would be planning-meta, so the helper stays bare.
-  - [ ] T3.13 In-module unit tests for `runtime`:
+  - [x] T3.13 In-module unit tests for `runtime`:
     ```rust
     #[cfg(test)]
     #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -579,13 +579,13 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     - **Why `tokio::test(flavor = "current_thread")`**: `detect` is async; tests need a runtime. `current_thread` is enough — the test makes a single sequential call and does not benefit from multi-threaded scheduling. Matches Story 1.7 / 1.8 conventions where async tests stayed minimal.
     - **Skip-on-real-runtime guard**: the test machine may actually have `/var/run/docker.sock`. We skip rather than fail in that case — a real runtime is not a *test* environment failure. Same pattern Story 1.5 used (`apple_silicon::tests` skips on non-arm64).
     - **Tests that need a *successful* probe** (AC3, AC4) are integration-tested in `tests/sandbox_preflight.rs` (T4) using `tokio::net::UnixListener` + a hand-rolled HTTP/1.1 `/_ping` responder. The in-module unit suite stays focused on the pure-function paths (precedence resolution, label rendering, error chain construction).
-  - [ ] T3.14 Do NOT define a `Display` impl for `RuntimeProbe`, `ProbeAttempt`, `Candidate`, or `EnvSource`. The Display surface this story owns is on `PreflightError` (via `format_no_runtime_reachable`) and on `ProbeFailure` + `SandboxError` (via thiserror's `#[error]`). Pre-adding Display to value types creates two paths to format the same data, with the inevitable drift.
-  - [ ] T3.15 Do NOT add a `bollard::API_DEFAULT_VERSION` re-export at the crate root. The constant lives in `bollard`; consumers in this story reach it via the `bollard::` path explicitly. Story 1.10 (the first heavy bollard consumer) decides the re-export policy.
-  - [ ] T3.16 Do NOT add `From<bollard::errors::Error> for ProbeFailure`. Each call site that produces a `ProbeFailure::PingFailed` does so explicitly via `.map_err(|source| ProbeFailure::PingFailed { source })`. A blanket `From` impl would lose the discriminator between `PingFailed` (post-connect) and `ConnectFailed` (pre-connect, mapped via a different path). Same pattern Story 1.8 used to forbid `From<rusqlite::Error> for CacheError`.
+  - [x] T3.14 Do NOT define a `Display` impl for `RuntimeProbe`, `ProbeAttempt`, `Candidate`, or `EnvSource`. The Display surface this story owns is on `PreflightError` (via `format_no_runtime_reachable`) and on `ProbeFailure` + `SandboxError` (via thiserror's `#[error]`). Pre-adding Display to value types creates two paths to format the same data, with the inevitable drift.
+  - [x] T3.15 Do NOT add a `bollard::API_DEFAULT_VERSION` re-export at the crate root. The constant lives in `bollard`; consumers in this story reach it via the `bollard::` path explicitly. Story 1.10 (the first heavy bollard consumer) decides the re-export policy.
+  - [x] T3.16 Do NOT add `From<bollard::errors::Error> for ProbeFailure`. Each call site that produces a `ProbeFailure::PingFailed` does so explicitly via `.map_err(|source| ProbeFailure::PingFailed { source })`. A blanket `From` impl would lose the discriminator between `PingFailed` (post-connect) and `ConnectFailed` (pre-connect, mapped via a different path). Same pattern Story 1.8 used to forbid `From<rusqlite::Error> for CacheError`.
 
-- [ ] **T4. Author `tests/sandbox_preflight.rs` — integration tests with mock Unix listeners** (AC: 3, 4, 5)
-  - [ ] T4.1 New file `tests/sandbox_preflight.rs`. Standard integration-test crate (separate compilation unit; sees `lcrc::*` only via the public API). Standard exemption attribute at file top: `#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]`. Use `#[tokio::test(flavor = "current_thread")]` — every test in this file is async because `detect` is async.
-  - [ ] T4.2 Imports:
+- [x] **T4. Author `tests/sandbox_preflight.rs` — integration tests with mock Unix listeners** (AC: 3, 4, 5)
+  - [x] T4.1 New file `tests/sandbox_preflight.rs`. Standard integration-test crate (separate compilation unit; sees `lcrc::*` only via the public API). Standard exemption attribute at file top: `#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]`. Use `#[tokio::test(flavor = "current_thread")]` — every test in this file is async because `detect` is async.
+  - [x] T4.2 Imports:
     ```rust
     use lcrc::sandbox::runtime::{
         detect, EnvSource, PrecedenceLayer, PreflightError, ProbeFailure,
@@ -600,7 +600,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     use tokio::net::UnixListener;
     use tokio::task::JoinHandle;
     ```
-  - [ ] T4.3 Helper `MapEnv` (copy of T3.13's helper, lifted into this crate — integration crates cannot see `src/sandbox/runtime.rs`'s `tests` module):
+  - [x] T4.3 Helper `MapEnv` (copy of T3.13's helper, lifted into this crate — integration crates cannot see `src/sandbox/runtime.rs`'s `tests` module):
     ```rust
     #[derive(Debug, Default)]
     struct MapEnv(Mutex<HashMap<String, String>>);
@@ -621,7 +621,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
         }
     }
     ```
-  - [ ] T4.4 Helper `spawn_mock_docker(path: PathBuf, accept_count: Arc<AtomicUsize>) -> JoinHandle<()>` — spawns a `UnixListener` on `path` that accepts incoming connections, reads the HTTP request, and replies with a canned `/_ping` response. Implementation:
+  - [x] T4.4 Helper `spawn_mock_docker(path: PathBuf, accept_count: Arc<AtomicUsize>) -> JoinHandle<()>` — spawns a `UnixListener` on `path` that accepts incoming connections, reads the HTTP request, and replies with a canned `/_ping` response. Implementation:
     ```rust
     /// Minimal HTTP/1.1 handler that mimics `/_ping`. Returns immediately
     /// after writing the response; does not implement keep-alive.
@@ -657,7 +657,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     - **`accept` may run forever**: the listener loop is unbounded; the test drops the `JoinHandle` (or aborts it explicitly) when the test scope ends. `tokio::test` cleans up its runtime, which drops outstanding tasks. If a test hangs waiting on a listener, the abort-on-drop path is broken — investigate; do not paper over with `tokio::time::timeout`.
     - **Header `Api-Version: 1.43`**: bollard's `Docker::ping()` reads this header to negotiate the API version. The exact value matters less than its presence — `1.43` is recent-stable Docker; verify against bollard 0.18's actual ping handler during dev-story.
     - **Best-effort error swallowing in `handle_one`**: the mock is fixture code; bollard's connection state on the other end determines correctness. If bollard's `ping()` succeeds against this canned response, the test passes; if it fails (because of a header mismatch or HTTP/1.1 vs HTTP/1.0 quirk), iterate on `RESPONSE` until ping succeeds. The fixture's job is to look enough like a Docker daemon for ping to return `Ok` — nothing more.
-  - [ ] T4.5 Test `successful_probe_via_lcrc_runtime_docker_host`:
+  - [x] T4.5 Test `successful_probe_via_lcrc_runtime_docker_host`:
     ```rust
     #[tokio::test(flavor = "current_thread")]
     async fn successful_probe_via_lcrc_runtime_docker_host() {
@@ -677,7 +677,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     ```
     - **AC3 verification, layer 1**: the `LCRC_RUNTIME_DOCKER_HOST` half. Same shape as AC3's general case but pins layer 1 specifically.
     - **Why the `sleep(50ms)`**: `tokio::spawn` schedules the listener task; without yielding, `detect` may try to connect before `UnixListener::bind` returns. 50 ms is generous; if it flakes, switch to a `tokio::sync::oneshot` ready-signal from the listener.
-  - [ ] T4.6 Test `successful_probe_via_docker_host_when_lcrc_unset`:
+  - [x] T4.6 Test `successful_probe_via_docker_host_when_lcrc_unset`:
     ```rust
     #[tokio::test(flavor = "current_thread")]
     async fn successful_probe_via_docker_host_when_lcrc_unset() {
@@ -695,7 +695,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     }
     ```
     - **AC3 verification, layer 2** + the `unix://` prefix-stripping check from T3.9. One test covers both.
-  - [ ] T4.7 Test `precedence_chain_stops_at_first_success_AC4`:
+  - [x] T4.7 Test `precedence_chain_stops_at_first_success_AC4`:
     ```rust
     #[tokio::test(flavor = "current_thread")]
     async fn precedence_chain_stops_at_first_success_AC4() {
@@ -723,7 +723,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     }
     ```
     - **AC4 direct verification**. The DefaultDockerSock + PodmanDefaultSock layers can't be tested for "no probe" without filesystem manipulation; the AC's two-layer test (LCRC + DOCKER_HOST) is the load-bearing assertion. The implicit guarantee for the further layers follows from the same loop — once the test pins that the loop short-circuits at layer 1, the pattern holds for layers 3 and 4 by inspection.
-  - [ ] T4.8 Test `no_runtime_reachable_returns_four_attempts_in_order_AC5`:
+  - [x] T4.8 Test `no_runtime_reachable_returns_four_attempts_in_order_AC5`:
     ```rust
     #[tokio::test(flavor = "current_thread")]
     async fn no_runtime_reachable_returns_four_attempts_in_order_AC5() {
@@ -763,7 +763,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     }
     ```
     - **AC5 direct verification**. Variants for layers 0/1 are `SocketFileMissing` (not `EnvVarUnset`) because the env vars are *set* — to nonexistent paths. The `EnvVarUnset` path is exercised in the unit tests (T3.13 `detect_returns_no_runtime_reachable_when_chain_empty`).
-  - [ ] T4.9 Test `env_var_set_to_empty_string_treated_as_unset`:
+  - [x] T4.9 Test `env_var_set_to_empty_string_treated_as_unset`:
     ```rust
     #[tokio::test(flavor = "current_thread")]
     async fn env_var_set_to_empty_string_treated_as_unset() {
@@ -786,19 +786,19 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     }
     ```
     - **POSIX-shell-empty-string semantics check** (T3.8). Pins that empty-string env vars are treated as unset, not as the empty path string `""`.
-  - [ ] T4.10 Do NOT spawn the `lcrc` binary in this test (no `assert_cmd::Command::cargo_bin("lcrc")`). The end-to-end CLI exit-11 contract is verified separately in `tests/cli_exit_codes.rs` (T6) — that's where `assert_cmd` is the right tool. This crate exercises the typed Rust API surface directly.
-  - [ ] T4.11 Do NOT add a test that exercises the *real* host runtime (e.g. opening `/var/run/docker.sock` if it exists and asserting success). Real-runtime tests are environment-dependent and would flake on CI runners that don't have Docker installed. The `tests/sandbox_envelope.rs` integration suite (Story 1.10 / Story 7.4) is the right home for runtime-real tests, and it gates v1 ship — not Story 1.9's preflight primitive.
-  - [ ] T4.12 Do NOT use `serial_test` or any cross-test serialization crate. Each test creates its own `TempDir` and `MapEnv`; none mutate process-global state. The standard parallel test execution is correct.
+  - [x] T4.10 Do NOT spawn the `lcrc` binary in this test (no `assert_cmd::Command::cargo_bin("lcrc")`). The end-to-end CLI exit-11 contract is verified separately in `tests/cli_exit_codes.rs` (T6) — that's where `assert_cmd` is the right tool. This crate exercises the typed Rust API surface directly.
+  - [x] T4.11 Do NOT add a test that exercises the *real* host runtime (e.g. opening `/var/run/docker.sock` if it exists and asserting success). Real-runtime tests are environment-dependent and would flake on CI runners that don't have Docker installed. The `tests/sandbox_envelope.rs` integration suite (Story 1.10 / Story 7.4) is the right home for runtime-real tests, and it gates v1 ship — not Story 1.9's preflight primitive.
+  - [x] T4.12 Do NOT use `serial_test` or any cross-test serialization crate. Each test creates its own `TempDir` and `MapEnv`; none mutate process-global state. The standard parallel test execution is correct.
 
-- [ ] **T5. Update `src/cli/scan.rs` — wire preflight + setup-instructions output** (AC: 1, 2, 6)
-  - [ ] T5.1 Replace the current placeholder `pub fn run() -> Result<(), crate::error::Error>` body. The new body:
+- [x] **T5. Update `src/cli/scan.rs` — wire preflight + setup-instructions output** (AC: 1, 2, 6)
+  - [x] T5.1 Replace the current placeholder `pub fn run() -> Result<(), crate::error::Error>` body. The new body:
     1. Spins up a current-thread tokio runtime (`tokio::runtime::Builder::new_current_thread().enable_all().build()?` — or equivalent error-mapped via `Error::Other(anyhow::Error)` for the build failure path).
     2. Inside `runtime.block_on(async { ... })`, calls `lcrc::sandbox::runtime::detect(&lcrc::sandbox::runtime::SystemEnv).await`.
     3. On `Ok(probe)`: emits `tracing::info!(target: "lcrc::sandbox::runtime", socket_path = %probe.socket_path.display(), source = probe.source.name(), "detected container runtime")`. Then continues with the existing placeholder behavior: `crate::output::diag("`lcrc scan` is not yet implemented in this build.");` + `Ok(())`. The end-to-end scan pipeline (image pull → server start → container run → cell write → HTML render) is wired in Story 1.12; for now, scan does the preflight and stops.
     4. On `Err(PreflightError::NoRuntimeReachable { .. })`:
        a. Prints the rendered `format_no_runtime_reachable(...)` block to stderr via `crate::output::diag(&err.to_string())`. The Display already includes the layer-by-layer breakdown + setup instructions; one print covers both AC1 (substring `brew install podman`) and the full diagnostic.
        b. Returns `Err(crate::error::Error::Preflight(err.to_string()))`. The `to_string()` carries the same Display message; `main.rs` then prints `error: preflight failed: <full block>` *and* maps to `ExitCode::PreflightFailed`. The user sees the full diagnostic twice (once from `output::diag`, once from `main.rs::lcrc::output::diag(format!("error: {e}"))`). **This is a known double-print** — see Resolved decisions § "double-print of preflight diagnostic".
-  - [ ] T5.2 Skeleton:
+  - [x] T5.2 Skeleton:
     ```rust
     //! Module exists so `lcrc scan --help` works — clap-derive emits the
     //! per-subcommand help from the `Subcommand` enum's
@@ -841,7 +841,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     - **`enable_all()`**: enables both the IO and time drivers. `tokio::time::sleep` (used by tests but not by production preflight code) and `tokio::net::UnixStream` (used by bollard) require the IO + time drivers respectively. Cheap to enable both; saves a future "why is my timer not firing" debug session.
     - **`Error::Preflight(format!("tokio runtime init: {e}"))`** for the runtime-build failure path. This is the only path in `scan::run` that can fail before `detect` even runs; mapping it to `Preflight` over-classifies but is acceptable (the user sees `error: preflight failed: tokio runtime init: ...` and knows something below the runtime layer broke). Story 1.12 may decide to introduce a more specific variant; this story does not.
     - **`tracing::info!` field renderings**: `socket_path = %probe.socket_path.display()` uses the `%`-prefix to invoke `Display` (paths render via `display()`); `source = probe.source.name()` is a `&'static str`. The default `tracing-subscriber` `fmt::Layer` (Story 1.4 install) renders fields after the message: `INFO lcrc::sandbox::runtime: detected container runtime socket_path=/var/run/docker.sock source=default_docker_sock`. The `target:` override pins the event's module path so subscribers can filter by `lcrc::sandbox::runtime`.
-  - [ ] T5.3 Add to the existing in-module `mod tests` of `src/cli/scan.rs`: a smoke test that `run()` returns `Err(Error::Preflight(...))` when no runtime is reachable. Skip if `/var/run/docker.sock` exists (same pattern T3.13 / T4.8 used). Note: this test uses `SystemEnv` against the real process env; tests that need to inject a `MapEnv` go through `runtime::detect` directly (covered by T3 / T4).
+  - [x] T5.3 Add to the existing in-module `mod tests` of `src/cli/scan.rs`: a smoke test that `run()` returns `Err(Error::Preflight(...))` when no runtime is reachable. Skip if `/var/run/docker.sock` exists (same pattern T3.13 / T4.8 used). Note: this test uses `SystemEnv` against the real process env; tests that need to inject a `MapEnv` go through `runtime::detect` directly (covered by T3 / T4).
     ```rust
     #[cfg(test)]
     #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -896,11 +896,11 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     }
     ```
     - **No `set_var` / `remove_var`**: Rust 2024 marks `std::env::set_var` and `remove_var` as `unsafe fn` because they race with reads in other threads. The crate's `unsafe_code = "forbid"` lint rejects them outright. The test instead *checks* whether the env vars are set and skips if so; the trade-off is documented inline.
-  - [ ] T5.4 Do NOT update `src/cli.rs` (the parent `cli` module file). The dispatch chain is unchanged; only `cli/scan.rs::run` body changes.
-  - [ ] T5.5 Do NOT touch `src/main.rs`. The error-rendering call site (`output::diag(&format!("error: {e}"))` followed by `e.exit_code()`) already handles `Error::Preflight` correctly via the existing `error::Error::exit_code` exhaustive match (`src/error.rs:62`). No change needed.
+  - [x] T5.4 Do NOT update `src/cli.rs` (the parent `cli` module file). The dispatch chain is unchanged; only `cli/scan.rs::run` body changes.
+  - [x] T5.5 Do NOT touch `src/main.rs`. The error-rendering call site (`output::diag(&format!("error: {e}"))` followed by `e.exit_code()`) already handles `Error::Preflight` correctly via the existing `error::Error::exit_code` exhaustive match (`src/error.rs:62`). No change needed.
 
-- [ ] **T6. Update `tests/cli_exit_codes.rs` — add an exit-11 scenario test** (AC: 1, 2)
-  - [ ] T6.1 Append a new test `scan_exits_11_with_setup_instructions_when_no_runtime`:
+- [x] **T6. Update `tests/cli_exit_codes.rs` — add an exit-11 scenario test** (AC: 1, 2)
+  - [x] T6.1 Append a new test `scan_exits_11_with_setup_instructions_when_no_runtime`:
     ```rust
     #[test]
     fn scan_exits_11_with_setup_instructions_when_no_runtime() {
@@ -937,23 +937,23 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     - **`env_remove("DOCKER_HOST")` + `env_remove("LCRC_RUNTIME_DOCKER_HOST")`**: belt-and-suspender on the env-skip guard. `assert_cmd::Command::env_remove` strips the var from the spawned child's env *before* the binary starts, so even if the developer's shell has it set, the spawned `lcrc scan` sees them unset.
     - **`assert.get_output().stderr.clone()`**: `assert_cmd::Assert::get_output` returns the captured `Output`; `.stderr` is the captured stderr bytes. We check substrings on the `String` rendering. AC1 + AC2 are both substring contracts → one stderr capture covers both.
     - **AC1's "stdout is empty" sub-contract**: the AC text says "the setup-instructions block is the only user-facing diagnostic on this path; nothing else is printed to stdout." We can additionally assert `assert.get_output().stdout.is_empty()`. Add this assertion if clippy-clean and idiomatic.
-  - [ ] T6.2 Do NOT modify the existing `ok_path_exits_0` or `exit_code_enum_full_contract` tests. They cover separate contracts.
-  - [ ] T6.3 Do NOT add a test for the *successful* scan path (`scan_exits_0_when_runtime_reachable`). Successful scan is Story 1.12's contract; this story's scan command is "preflight + placeholder" — the success path is "preflight passes → print placeholder → exit 0", which is not a binding contract until Story 1.12 wires the rest of the pipeline. A test asserting exit-0-on-real-runtime would either be skipped on most CI runners or be wrong once Story 1.12 makes the placeholder go away.
+  - [x] T6.2 Do NOT modify the existing `ok_path_exits_0` or `exit_code_enum_full_contract` tests. They cover separate contracts.
+  - [x] T6.3 Do NOT add a test for the *successful* scan path (`scan_exits_0_when_runtime_reachable`). Successful scan is Story 1.12's contract; this story's scan command is "preflight + placeholder" — the success path is "preflight passes → print placeholder → exit 0", which is not a binding contract until Story 1.12 wires the rest of the pipeline. A test asserting exit-0-on-real-runtime would either be skipped on most CI runners or be wrong once Story 1.12 makes the placeholder go away.
 
-- [ ] **T7. Cargo.toml verification** (AC: all)
-  - [ ] T7.1 Run `cargo build` and observe whether `Cargo.lock` changes. Bollard 0.18 is already locked (line 42). `tokio = { version = "1", features = ["full"] }` (line 35) covers `UnixListener`, `UnixStream`, `time::sleep`, `runtime::Builder`, `task::spawn`, `task::JoinHandle`, `io::AsyncReadExt`, `io::AsyncWriteExt` — all needed by tests + production. `tempfile = "3"` (line 50) is locked. `nix = { version = "0.29", features = ["signal"] }` (line 56) — verify the `unistd::Uid::current()` API is reachable under the `signal` feature. If not (likely needs the `user` feature), bump the feature list:
+- [x] **T7. Cargo.toml verification** (AC: all)
+  - [x] T7.1 Run `cargo build` and observe whether `Cargo.lock` changes. Bollard 0.18 is already locked (line 42). `tokio = { version = "1", features = ["full"] }` (line 35) covers `UnixListener`, `UnixStream`, `time::sleep`, `runtime::Builder`, `task::spawn`, `task::JoinHandle`, `io::AsyncReadExt`, `io::AsyncWriteExt` — all needed by tests + production. `tempfile = "3"` (line 50) is locked. `nix = { version = "0.29", features = ["signal"] }` (line 56) — verify the `unistd::Uid::current()` API is reachable under the `signal` feature. If not (likely needs the `user` feature), bump the feature list:
     ```toml
     nix = { version = "0.29", features = ["signal", "user"] }
     ```
     This is the **only** Cargo.toml change Story 1.9 may need; document the change in the File List + Dev Notes if it lands.
-  - [ ] T7.2 Do NOT add `bollard`-related sub-features beyond the default. The default `bollard` feature set (since 0.18) already includes the Unix-socket connector; no `chrono` / `ssl` / `time` extension needed for ping.
-  - [ ] T7.3 Do NOT add `serial_test` or any test-serialization crate. Story 1.9's tests do not mutate process-global state (env, working dir, signal handlers).
-  - [ ] T7.4 If `Cargo.lock` changes for any reason other than the documented `nix` feature bump, investigate before pushing. An unintended re-resolve signals an accidental dep-tree change worth understanding.
+  - [x] T7.2 Do NOT add `bollard`-related sub-features beyond the default. The default `bollard` feature set (since 0.18) already includes the Unix-socket connector; no `chrono` / `ssl` / `time` extension needed for ping.
+  - [x] T7.3 Do NOT add `serial_test` or any test-serialization crate. Story 1.9's tests do not mutate process-global state (env, working dir, signal handlers).
+  - [x] T7.4 If `Cargo.lock` changes for any reason other than the documented `nix` feature bump, investigate before pushing. An unintended re-resolve signals an accidental dep-tree change worth understanding.
 
-- [ ] **T8. Local CI mirror** (AC: all)
-  - [ ] T8.1 `cargo build` — confirms the new module compiles and the wire-up in `cli/scan.rs` typechecks against `error::Error`.
-  - [ ] T8.2 `cargo fmt` — apply rustfmt; commit any reformatted lines.
-  - [ ] T8.3 `cargo clippy --all-targets --all-features -- -D warnings`. Specifically watch for:
+- [x] **T8. Local CI mirror** (AC: all)
+  - [x] T8.1 `cargo build` — confirms the new module compiles and the wire-up in `cli/scan.rs` typechecks against `error::Error`.
+  - [x] T8.2 `cargo fmt` — apply rustfmt; commit any reformatted lines.
+  - [x] T8.3 `cargo clippy --all-targets --all-features -- -D warnings`. Specifically watch for:
     - `clippy::missing_errors_doc` on `pub async fn detect` and `pub fn run` — `# Errors` rustdoc section per T3.12 / T5.2.
     - `clippy::missing_docs` on every `pub` item (`SandboxError`, `PreflightError`, `RuntimeProbe`, `ProbeAttempt`, `ProbeFailure`, `PrecedenceLayer`, `EnvSource`, `SystemEnv`, public methods).
     - `clippy::module_name_repetitions` may fire on `RuntimeProbe` / `PreflightError` inside the `runtime` module — the names already include the module's domain word. Suppress with `#[allow(clippy::module_name_repetitions)]` on the type if it does fire; the alternative (renaming to `Probe` / `Error`) clashes with the parent module's scope.
@@ -961,11 +961,11 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
     - `clippy::result_large_err` should NOT fire — `PreflightError` carries a `Vec<ProbeAttempt>` (24 bytes for the Vec header) plus `attempts` items live on the heap. Total `Result<RuntimeProbe, PreflightError>` size is bounded by `RuntimeProbe` size (`PathBuf` 24 bytes + `PrecedenceLayer` 1 byte + padding ≈ 32 bytes) + the `PreflightError` enum tag + `Vec<ProbeAttempt>` header (24 bytes) ≈ under 64 bytes. Comfortable inside the 128-byte budget. If clippy disagrees, box the `Vec` (`Box<Vec<ProbeAttempt>>`) before suppressing.
     - `clippy::unnecessary_wraps` should NOT fire — both `detect` and `probe_one` return `Result` because they can fail.
     - `clippy::needless_pass_by_value` should NOT fire — public APIs take `&dyn EnvSource` and `&Candidate`.
-  - [ ] T8.4 `cargo test` — all suites:
+  - [x] T8.4 `cargo test` — all suites:
     - In-module: `cache::*`, `cli::*`, `error`, `exit_code`, `machine`, `output`, **`sandbox`** (new), **`sandbox::runtime`** (new), `util::tracing`, `version`.
     - Integration: `cache_migrations`, `cache_roundtrip`, `cli_exit_codes` (now with the new exit-11 test), `cli_help_version`, `machine_fingerprint`, **`sandbox_preflight`** (new).
     - Total target: ~110+ tests pass (Story 1.8 left ~94; this story adds the in-module sandbox tests + 6 integration tests + 1 cli-exit-code test).
-  - [ ] T8.5 Manual scope-discipline grep:
+  - [x] T8.5 Manual scope-discipline grep:
     ```
     git grep -nE 'bollard::|tokio::net::UnixListener|UnixStream' src/ tests/ \
       | grep -v '^src/sandbox/runtime.rs:' \
@@ -973,7 +973,7 @@ so that I'm not stuck debugging a cryptic Docker socket error (FR17a, NFR-S3).
       | grep -v '^tests/sandbox_preflight.rs:'
     ```
     Must produce zero matches — bollard + Unix-socket surface stays inside the sandbox modules and their tests + the cli scan wiring point. Same single-source-of-truth grep contract Stories 1.6 / 1.7 / 1.8 used.
-  - [ ] T8.6 Verify locally that `RUST_LOG=info cargo run -- scan` (with no runtime available) prints the `INFO lcrc::sandbox::runtime: detected container runtime ...` line (if a runtime IS available) or the setup-instructions block (if not). Eyeball the rendering. AC6 is verified by the in-module + integration tests; this is the manual sanity check.
+  - [x] T8.6 Verify locally that `RUST_LOG=info cargo run -- scan` (with no runtime available) prints the `INFO lcrc::sandbox::runtime: detected container runtime ...` line (if a runtime IS available) or the setup-instructions block (if not). Eyeball the rendering. AC6 is verified by the in-module + integration tests; this is the manual sanity check.
 
 ## Dev Notes
 
@@ -1222,10 +1222,37 @@ This story sits at:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-sonnet-4-6[1m]
 
 ### Debug Log References
 
+- Added `"user"` feature to `nix = "0.29"` in Cargo.toml — `nix::unistd::Uid` is gated behind the `user` feature in nix 0.29 (confirmed by inspecting the crate source).
+- Collapsed `if cfg!(target_os = "macos") { if let Some(home) = ... { ... } }` to `if cfg!(target_os = "macos") && let Some(home) = ...` per clippy `collapsible_if`.
+- Changed `io_error_from_bollard(e)` to take `&bollard::errors::Error` per clippy `needless_pass_by_value`, and used `std::io::Error::other(e.to_string())` per `io_other_error`.
+- Moved `PING_RESPONSE` constant before statement in `tests/sandbox_preflight.rs` per clippy `items_after_statements`.
+- Changed `loop { match ... }` to `while let Ok(...) = ...` per clippy `while_let_loop`.
+- Eliminated unreachable `other =>` arms in integration tests (single-variant enum).
+
 ### Completion Notes List
 
+- Authored `src/sandbox.rs` with `SandboxError` parent enum (one variant: `Preflight(#[from] runtime::PreflightError)`).
+- Authored `src/sandbox/runtime.rs` with full four-layer precedence chain (`LCRC_RUNTIME_DOCKER_HOST` → `DOCKER_HOST` → `/var/run/docker.sock` → Podman default), `EnvSource` seam, `detect()` async function, and `format_no_runtime_reachable()` setup-instructions formatter.
+- Authored `tests/sandbox_preflight.rs` with 5 integration tests using mock `tokio::net::UnixListener` instances covering AC3/AC4/AC5 and the empty-env-var semantics.
+- Updated `src/cli/scan.rs` to wire preflight into `scan::run()` with tracing on success and `Error::Preflight` on failure (exit 11).
+- Added exit-11 test to `tests/cli_exit_codes.rs` verifying AC1/AC2 substring contracts.
+- Bumped `nix` features from `["signal"]` to `["signal", "user"]` in `Cargo.toml`.
+- All 107 tests pass; zero clippy warnings/errors; `cargo fmt --check` clean.
+
 ### File List
+
+- `src/lib.rs` — added `pub mod sandbox;`
+- `src/sandbox.rs` — new: module root + `SandboxError` enum
+- `src/sandbox/runtime.rs` — new: precedence chain + `detect()` + probe types
+- `src/cli/scan.rs` — wired preflight into `run()`; replaced placeholder body
+- `tests/sandbox_preflight.rs` — new: integration tests with mock Unix listeners
+- `tests/cli_exit_codes.rs` — added `scan_exits_11_with_setup_instructions_when_no_runtime`
+- `Cargo.toml` — bumped `nix` features to `["signal", "user"]`
+
+### Change Log
+
+- 2026-05-07: Implemented Story 1.9 — container runtime preflight with four-layer socket precedence chain; `lcrc scan` now exits 11 with setup instructions when no runtime is reachable.
