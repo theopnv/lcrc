@@ -1,6 +1,6 @@
 # Story 1.8: Cache cell write/read API with atomic semantics
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -330,6 +330,23 @@ so that no half-written cells exist (NFR-R2) and lookups before measurement work
   - [x] T5.4 Run `cargo test` — confirms all in-module unit tests in `src/cache/cell.rs::tests` pass AND the new `tests/cache_roundtrip.rs` integration tests pass AND every existing test in the suite (in-module suites for `cache::key`, `cache::migrations`, `error`, `exit_code`, `machine`, `output`, `version`, etc., plus `tests/cache_migrations.rs`, `tests/cli_exit_codes.rs`, `tests/cli_help_version.rs`, `tests/machine_fingerprint.rs`) still passes.
   - [x] T5.5 Manual scope-discipline grep: `git grep -nE 'rusqlite::|PRAGMA|user_version|INSERT INTO cells|SELECT .* FROM cells' src/ tests/ | grep -v '^src/cache/cell.rs:' | grep -v '^src/cache/migrations.rs:' | grep -v '^src/cache/schema.rs:' | grep -v '^src/cache.rs:' | grep -v '^tests/cache_migrations.rs:' | grep -v '^tests/cache_roundtrip.rs:'`. Must produce zero matches — the rusqlite + cells-table SQL surface stays contained inside the cache modules and their tests. Same single-source-of-truth grep contract Stories 1.6 / 1.7 used.
   - [x] T5.6 Verify the perf-test wall-clock on the local machine: `cargo test --test cache_roundtrip lookup_existing_key_at_10k_cells_under_100ms_NFR_P5 -- --nocapture` — run manually; eyeball that the test wall-clock is well under the 100 ms budget (typically single-digit ms on M1 Pro). If the lookup approaches 100 ms locally, investigate the populate phase (per-row tx overhead) and consider the bulk-populate optimization noted in T4.8.
+
+### Review Findings
+
+Reviewed 2026-05-07 via `bmad-code-review` (three parallel layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). Diff: `src/cache.rs` (+37/-2), `src/cache/cell.rs` (+480/0 new), `tests/cache_roundtrip.rs` (+169/0 new). Triage: 2 patches applied inline, 6 deferred to `deferred-work.md`, 15 dismissed as per-spec design choices (e.g. "Generic Pragma variant scope", "defensive non-zero check on pass", T4.8 populate-phase guidance) or out-of-story-scope.
+
+- [x] [Review][Patch] Strengthen `transaction_rollback_on_panic_leaves_no_partial_row` with positive control on the panic payload [tests/cache_roundtrip.rs:71-138] — without the guard, a regression that broke `migrations::open` / `unchecked_transaction` / `tx.execute` (each `.unwrap()` inside the `catch_unwind` closure) would still appear green because the post-panic `lookup_cell` would also see no row. Now asserts `catch_unwind` returned `Err` carrying the sentinel string. (Edge Case Hunter finding)
+- [x] [Review][Patch] Document the `DuplicateCell { key: Box<CellKey> }` deviation from the literal spec — see "Resolved decisions amendments (post-review)" section below. (Acceptance Auditor finding)
+- [x] [Review][Defer] 100 ms perf budget potentially flaky on shared CI runners [tests/cache_roundtrip.rs:128-156] — deferred, escape hatch already documented in T4.8 ("if CI runs the populate phase >30 s, switch to a single explicit transaction wrapping all 10 K INSERTs").
+- [x] [Review][Defer] `Option<f64>` perf fields (`duration_seconds`, `tokens_per_sec`, `ttft_seconds`, `power_watts`) silently round-trip `NaN` / `±Infinity`, breaking `PartialEq` round-trip equality [src/cache/cell.rs:140-149] — deferred, producer-layer validation per spec ("the cache primitive trusts its inputs"). Owner: Story 2.10 (perf metrics graceful degrade) when the perf-collector wires concrete failure handling.
+- [x] [Review][Defer] Empty-string PK component values (`""` for `model_sha`, `task_id`, etc.) are accepted and treated as a distinct row identity [src/cache/cell.rs:101-115] — deferred, producer-layer validation per spec (Story 1.6 derives the canonical hex strings; Story 1.12 / 2.6 enforce upstream).
+- [x] [Review][Defer] `scan_timestamp: String` is free-form `TEXT` — neither write nor read validates RFC 3339 format [src/cache/cell.rs:135] — deferred, owner is `util::time` helper landing with Story 1.12.
+- [x] [Review][Defer] `Cache::open` is not idempotent under concurrent first-time creation by two processes against a fresh path [src/cache/cell.rs:178-181] — deferred, single-writer model is enforced upstream by Story 6.4's `scan.lock`. Cache layer correctly does not re-implement application-level mutual exclusion.
+- [x] [Review][Defer] No `CHECK (pass IN (0, 1))` constraint at the SQL layer [src/cache/schema.rs] — deferred, cooperates with the "defensive non-zero check on read" decision (line 387); a CHECK constraint would belt-and-suspender it but is a Story-1.7 schema concern, not a Story-1.8 cell concern.
+
+### Resolved decisions amendments (post-review)
+
+- **`DuplicateCell { key: Box<CellKey> }` (was: `key: CellKey`).** Story spec line 391 + T1.3 line 41 pinned the unboxed shape. The implementation boxed the field to keep `Result<_, CacheError>` under clippy's `result_large_err` 128-byte budget — `CellKey` is 7 × `String` ≈ 168 bytes, which would otherwise force a crate-wide or per-function `#[allow(clippy::result_large_err)]` suppression that pollutes every other `Result<_, CacheError>` call site in the cache module. Functional contract is preserved: matchers consume `*key` (one extra deref), the `Display` template formats through `Box`'s auto-deref unchanged, and T3.7's seven-PK-substring assertion still passes. Test sites updated to `assert_eq!(*key, cell.key)` (cell.rs:449, cache_roundtrip.rs:155). Spec literally violated; intent preserved. Documenting here rather than reverting to honor the cumulative-clippy-budget cost.
 
 ## Dev Notes
 

@@ -69,6 +69,8 @@ fn lookup_missing_key_returns_none_via_public_api() {
 
 #[test]
 fn transaction_rollback_on_panic_leaves_no_partial_row() {
+    const SENTINEL: &str = "simulated mid-transaction abort";
+
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("lcrc.db");
     let cell = cell_at(42);
@@ -79,7 +81,7 @@ fn transaction_rollback_on_panic_leaves_no_partial_row() {
     // refuses to type-check. `unchecked_transaction` is rusqlite's
     // documented `&self` escape hatch — atomicity semantics are identical;
     // the "unchecked" qualifier refers to nested-tx misuse only.
-    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let conn = lcrc::cache::migrations::open(&path).unwrap();
         let tx = conn.unchecked_transaction().unwrap();
         tx.execute(
@@ -118,8 +120,24 @@ fn transaction_rollback_on_panic_leaves_no_partial_row() {
         .unwrap();
         // Drop `tx` without commit by panicking — the `Drop` impl rolls
         // back the partially-applied INSERT.
-        panic!("simulated mid-transaction abort");
+        panic!("{SENTINEL}");
     }));
+
+    // Positive control: the closure must have unwound from the intentional
+    // `panic!(SENTINEL)` after the INSERT, not from a stray `unwrap()`
+    // earlier in the body. Without this guard a regression that broke
+    // `migrations::open` or `unchecked_transaction` would still appear
+    // green because the post-panic lookup would also see no row.
+    let payload = unwound.expect_err("closure must panic to exercise the rollback path");
+    let payload_str = payload
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| payload.downcast_ref::<&'static str>().copied())
+        .unwrap_or("<non-string panic payload>");
+    assert!(
+        payload_str.contains(SENTINEL),
+        "expected the intentional sentinel panic, got {payload_str:?}"
+    );
 
     let cache = Cache::open(&path).unwrap();
     assert_eq!(cache.lookup_cell(&cell.key).unwrap(), None);
